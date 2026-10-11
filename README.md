@@ -1,6 +1,6 @@
-# TerraLedger — Frontend Demonstration
+# TerraLedger 
 
-A self-contained frontend prototype for a digital land allocation and boundary
+A self contained prototype for a digital land allocation and boundary
 verification platform for estate developments.
 
 ## Run it
