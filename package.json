@@ -1,0 +1,14 @@
+{
+  "name": "terraledger-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Static frontend demonstration for TerraLedger.",
+  "scripts": {
+    "start": "npm run build:css && python -m http.server 8000",
+    "build:css": "tailwindcss -i ./styles.css -o ./dist/tailwind.css --minify",
+    "dev:css": "tailwindcss -i ./styles.css -o ./dist/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

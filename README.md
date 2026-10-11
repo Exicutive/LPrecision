@@ -1,49 +1,55 @@
-# Land Boundary Engine
+# TerraLedger — Frontend Demonstration
 
-This is the first learning milestone: upload a DXF survey plan, list candidate
-polylines, and calculate each candidate's planar area, perimeter, and segment
-azimuths. It does not claim legal or field-survey verification.
+A self-contained frontend prototype for a digital land allocation and boundary
+verification platform for estate developments.
 
-## What you will learn
+## Run it
 
-1. A DXF is a CAD document made of entities such as polylines and text.
-2. A parcel boundary is usually a closed polyline.
-3. The polygon's vertices determine its area and perimeter.
-4. Source files and validation warnings must stay with every calculation.
-
-## Run locally
-
-Create and activate a virtual environment, install dependencies, then start
-the local server:
+There is no backend, database, API, authentication service, or file processor.
+The CSS is compiled locally with Tailwind CSS. Install dependencies and start
+the local web server:
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-py -m pip install -r requirements.txt
-py -m uvicorn app.main:app --reload
+npm install
+npm start
 ```
 
-Open `http://127.0.0.1:8000` and upload a DXF file.
+Then open http://localhost:8000 in a modern browser. `npm start` rebuilds the
+stylesheet before serving the app. During design work, run `npm run dev:css`
+in a second terminal to rebuild Tailwind CSS when `styles.css`, `index.html`, or
+`app.js` changes.
 
-If a managed Windows environment prevents virtual-environment creation, install
-the packages for your user account instead:
+## Demonstrated routes
 
-```powershell
-py -m pip install --user -r requirements.txt
-py -m uvicorn app.main:app --reload
-```
+The browser-based navigation demonstrates these separate static endpoints:
 
-## First exercise
+- `/` — public landing page
+- `/admin/` — administrator workspace
+- `/property/` — property-holder invitation and dashboard journey
 
-Read `app/geometry.py`. The `polygon_area` function uses the shoelace formula.
-Change the square in `tests/test_geometry.py` to dimensions from your plan and
-run:
+The administrator workspace demonstrates:
 
-```powershell
-py -m pytest
-```
+- Administrator workspace: overview, estates, parcels, allocations,
+  invitations, survey data, activity logs, and settings
+- Parcel detail panel with a surveyed-boundary-style SVG
+- Four-step allocation and invitation workflow
 
-## Next milestone
+The property-holder endpoint demonstrates:
 
-Draw the selected DXF boundary in the browser and export its vertices,
-segments, and plan metadata as CSV. Only then add a database and user accounts.
+- Invitation acceptance screen
+- Property-holder dashboard: property overview, boundary detail, survey
+  information, allocation information, documents, and simulated location view
+
+## Local mock data
+
+All estate, parcel, allocation, invitation, survey, document, and location
+values are local mock data in `app.js`. Interactions demonstrate interface
+states only. No invitations, uploads, allocations, accounts, settings, GPS
+requests, or records are created outside the browser session.
+
+## Integrations still required
+
+A production implementation still needs authenticated backend APIs, role and
+authorization enforcement, invitation-token validation and email delivery,
+survey-file processing and validation, an approved document store, mapping and
+device-location integrations, audit logs, and legal/survey review workflows.
