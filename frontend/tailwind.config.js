@@ -1,6 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./index.html', './app.js'],
+  // The UI markup is split across the JavaScript view modules. Include them
+  // so Tailwind keeps the matching component classes in the generated CSS.
+  content: ['./index.html', './app.js', './js/**/*.js'],
   theme: {
     extend: {
       colors: {
