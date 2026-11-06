@@ -1,0 +1,20 @@
+Hello {{ recipient_name }},
+
+{{ company_name }} has allocated a property to you. Create or access your TerraLedger account using {{ recipient_email }} to securely view the allocation.
+
+Allocation details
+Company: {{ company_name }}
+Estate: {{ estate_name }}
+Plot: {{ plot_number }}
+Block: {{ block }}
+Plot size: {{ plot_size }}
+Property type: {{ property_type }}
+Plot features: {% for feature in features %}{{ feature }}{% if not forloop.last %}, {% endif %}{% empty %}Not specified{% endfor %}
+Allocation date: {{ allocated_at }}
+
+Create your TerraLedger account or sign in with {{ recipient_email }}:
+{{ invitation_url }}
+
+The email address associated with this allocation cannot be changed while accepting it.
+
+An allocation record in TerraLedger does not independently establish legal title to property. Please consult the relevant legal and land-registration authorities.

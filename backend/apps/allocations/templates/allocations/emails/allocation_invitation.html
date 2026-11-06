@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Your TerraLedger property allocation</title>
+    <style>
+      body { margin: 0; padding: 24px 12px; background: #f3f6f4; color: #17231f; font: 16px/1.55 Arial, sans-serif; }
+      .container { max-width: 620px; margin: 0 auto; overflow: hidden; border: 1px solid #dce4df; border-radius: 14px; background: #fff; }
+      .header { padding: 25px 30px; background: #0c4a3e; color: #fff; }
+      .brand { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: .02em; }
+      .content { padding: 30px; }
+      h1 { margin: 0 0 14px; font-size: 25px; line-height: 1.25; }
+      .muted { color: #65736d; }
+      .details { width: 100%; margin: 22px 0; border-collapse: collapse; }
+      .details td { padding: 11px 0; border-bottom: 1px solid #e8eeea; vertical-align: top; }
+      .details td:first-child { width: 38%; color: #65736d; }
+      .cta { display: inline-block; margin: 8px 0 18px; padding: 13px 20px; border-radius: 7px; background: #0c4a3e; color: #fff !important; font-weight: 700; text-decoration: none; }
+      .notice { margin-top: 24px; padding: 14px 16px; border-left: 3px solid #a9680b; background: #fff7e8; color: #59451f; font-size: 14px; }
+      .footer { padding: 20px 30px; background: #f7f9f8; color: #65736d; font-size: 13px; overflow-wrap: anywhere; }
+      @media (max-width: 480px) { .content, .header, .footer { padding: 22px 18px; } h1 { font-size: 22px; } .details td:first-child { width: 43%; } }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <header class="header"><p class="brand">TerraLedger</p></header>
+      <section class="content">
+        <p class="muted">Property allocation confirmation</p>
+        <h1>Hello {{ recipient_name }},</h1>
+        <p>{{ company_name }} has allocated a property to you. Create or access your TerraLedger account using <strong>{{ recipient_email }}</strong> to securely view the allocation.</p>
+        <table class="details" role="presentation">
+          <tr><td>Company</td><td><strong>{{ company_name }}</strong></td></tr>
+          <tr><td>Estate</td><td><strong>{{ estate_name }}</strong></td></tr>
+          <tr><td>Plot</td><td><strong>{{ plot_number }}</strong></td></tr>
+          <tr><td>Block</td><td><strong>{{ block }}</strong></td></tr>
+          <tr><td>Plot size</td><td><strong>{{ plot_size }}</strong></td></tr>
+          <tr><td>Property type</td><td><strong>{{ property_type }}</strong></td></tr>
+          <tr><td>Features</td><td><strong>{% for feature in features %}{{ feature }}{% if not forloop.last %}, {% endif %}{% empty %}Not specified{% endfor %}</strong></td></tr>
+          <tr><td>Allocation date</td><td><strong>{{ allocated_at }}</strong></td></tr>
+        </table>
+        <p><a class="cta" href="{{ invitation_url }}">Create Your TerraLedger Account</a></p>
+        <p>If you already have an account, sign in with <strong>{{ recipient_email }}</strong>. For security, the email address associated with this allocation cannot be changed while accepting it.</p>
+        <div class="notice">An allocation record in TerraLedger does not independently establish legal title to property. Please consult the relevant legal and land-registration authorities.</div>
+      </section>
+      <footer class="footer">
+        If the button does not work, copy and paste this secure invitation link into your browser:<br>
+        <a href="{{ invitation_url }}">{{ invitation_url }}</a>
+      </footer>
+    </main>
+  </body>
+</html>

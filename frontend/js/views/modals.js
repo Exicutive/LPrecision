@@ -1,161 +1,45 @@
-import { data, state } from "../data.js";
-import { button, parcelSvg, status } from "../components.js";
+import { data, state } from "../data.js?v=20261106-settings";
+import { button, uiIcon } from "../components.js?v=20261026";
+
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+})[character]);
 
 export function allocationModal() {
-  const parcel = state.selectedParcel;
-  const progress = ["Parcel", "Recipient", "Review", "Confirm"]
-    .map(
-      (label, index) =>
-        /* HTML */ `<div
-          data-step="${index + 1}"
-          class="${state.allocationStep === index + 1 ? "active" : ""}"
-        >
-          ${label}
-        </div>`,
-    )
-    .join("");
-  const previousAction =
-    state.allocationStep > 1
-      ? button("Back", "allocation-back", "secondary")
-      : button("Cancel", "close-modal", "secondary");
-  const nextAction =
-    state.allocationStep < 4
-      ? button("Continue", "allocation-next", "primary")
-      : button("Confirm demonstration", "allocation-confirm", "primary");
-  let body = "";
-  if (state.allocationStep === 1)
-    body = /* HTML */ `<p>Select an available parcel for this allocation.</p>
-      <div class="form-grid">
-        ${data.parcels
-          .filter((item) => item.status === "Available")
-          .map(
-            (item) =>
-              `<button class="button ${parcel.plot === item.plot ? "primary" : "secondary"}" data-action="select-parcel:${item.plot}">${item.plot} · ${item.area}</button>`,
-          )
-          .join("")}
-      </div>`;
-  if (state.allocationStep === 2)
-    body = /* HTML */ `<p>
-        Enter the intended allottee details. These values stay in the browser
-        and are not sent anywhere.
-      </p>
-      <div class="form-grid">
-        <div class="field">
-          <label>Full name</label
-          ><input id="allottee-name" placeholder="e.g. Adewale Bello" />
-        </div>
-        <div class="field">
-          <label>Email address</label
-          ><input
-            id="allottee-email"
-            type="email"
-            placeholder="name@example.com"
-          />
-        </div>
-        <div class="field full">
-          <label>Phone number (optional)</label><input placeholder="+234 …" />
-        </div>
-      </div>`;
-  if (state.allocationStep === 3)
-    body = /* HTML */ `<p>
-        Review the property and recipient information before creating a
-        demonstration invitation.
-      </p>
-      <div class="review-card">
-        <strong
-          >${parcel.plot} · Block ${parcel.block} · Abeni Gardens Estate</strong
-        ><span>${parcel.area} · Currently available</span>
-      </div>
-      <div class="review-card">
-        <strong>Recipient details</strong
-        ><span
-          >Captured only in this browser for a frontend demonstration.</span
-        >
-      </div>`;
-  if (state.allocationStep === 4)
-    body = /* HTML */ `<div class="review-card">
-        <strong>Ready to demonstrate allocation</strong
-        ><span
-          >A local status change will be shown. No allocation is written to a
-          database and no email is sent.</span
-        >
-      </div>
-      <div class="notice">
-        In production, this final step requires authorized backend validation,
-        persistence and a secure invitation delivery service.
-      </div>`;
-  return /* HTML */ `<div class="modal-backdrop">
-    <section
-      class="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="allocation-title"
-    >
-      <header class="modal-header">
-        <div>
-          <p class="eyebrow">Allocation workflow</p>
-          <h2 id="allocation-title">Allocate a property</h2>
-        </div>
-        <button
-          class="close"
-          aria-label="Close allocation workflow"
-          data-action="close-modal"
-        >
-          ×
-        </button>
-      </header>
-      <div class="progress">${progress}</div>
-      ${body}
-      <div class="form-actions">${previousAction}${nextAction}</div>
-    </section>
-  </div>`;
+  const parcels = data.parcels.filter((parcel) =>
+    parcel.status === "available" && parcel.extraction_status === "approved",
+  );
+  const options = parcels.map((parcel) => `<option value="${parcel.id}">${escapeHtml(parcel.estate.name)} · Plot ${escapeHtml(parcel.plot_number)}${parcel.block ? ` · Block ${escapeHtml(parcel.block)}` : ""}${parcel.area_sqm ? ` · ${escapeHtml(parcel.area_sqm)} m²` : ""}</option>`).join("");
+  const emptyState = !parcels.length
+    ? `<div class="invitation-note">${uiIcon("parcel")} No available parcel yet.</div>`
+    : `<div class="field"><label for="allocation-parcel">Available parcel</label><select id="allocation-parcel" name="parcel_id" required><option value="">Select a parcel</option>${options}</select></div><div class="field"><label for="allocation-name">Recipient full name</label><input id="allocation-name" name="full_name" autocomplete="name" required maxlength="200" /></div><div class="field"><label for="allocation-email">Recipient email</label><input id="allocation-email" name="email" type="email" autocomplete="email" required maxlength="150" /></div><div class="field"><label for="allocation-reference">Allocation reference <span class="muted">(optional)</span></label><input id="allocation-reference" name="reference" maxlength="50" placeholder="Generated if left blank" /></div><p class="muted">The recipient must sign up or sign in with this email address. A failed email does not undo the allocation; you can resend the invitation from the allocation list.</p><p class="form-error" hidden></p><div class="form-actions"><button class="button secondary" type="button" data-action="close-modal">Cancel</button><button class="button primary" type="submit">Create allocation</button></div>`;
+  return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="allocation-title"><header class="modal-header"><div><p class="eyebrow">Allocation workflow</p><h2 id="allocation-title">Allocate an approved parcel</h2></div><button class="close" aria-label="Close" data-action="close-modal">×</button></header><form id="allocation-form" class="modal-form">${emptyState}</form></section></div>`;
+}
+
+export function surveyPlanUploadModal() {
+  const allocations = data.allocations.filter((allocation) => allocation.status !== "revoked");
+  const selected = allocations.find(
+    (allocation) => allocation.id === Number(state.surveyPlanAllocationId),
+  );
+  const options = allocations.map((allocation) => {
+    const parcel = allocation.parcel;
+    const recipient = allocation.allottee?.full_name || allocation.recipient_name;
+    const label = `${parcel.estate.name} · Plot ${parcel.plot_number}${parcel.block ? ` · Block ${parcel.block}` : ""} · ${recipient}`;
+    return `<option value="${allocation.id}" ${selected?.id === allocation.id ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
+  return `<div class="modal-backdrop"><section class="modal workflow-modal" role="dialog" aria-modal="true" aria-labelledby="survey-upload-title"><header class="modal-header"><div><p class="eyebrow">Individual survey plan</p><h2 id="survey-upload-title">Upload survey plan</h2><p>Attach this document to one company allocation. Company review is not government certification or proof of legal title.</p></div><button class="close" aria-label="Close" data-action="close-modal">×</button></header>${allocations.length ? `<form id="survey-plan-upload-form" class="workflow-form"><label>Allocated property<select name="allocation_id" required ${selected ? "disabled" : ""}>${selected ? "" : `<option value="">Select an allocation</option>`}${options}</select>${selected ? `<input type="hidden" name="allocation_id" value="${selected.id}" />` : ""}</label>${selected ? `<div class="invitation-note">${uiIcon("estate")} ${escapeHtml(selected.parcel.estate.name)} · Plot ${escapeHtml(selected.parcel.plot_number)}${selected.parcel.block ? ` · Block ${escapeHtml(selected.parcel.block)}` : ""}<br />Recipient: ${escapeHtml(selected.allottee?.full_name || selected.recipient_name)}</div>` : ""}<div class="form-grid"><label>Survey plan number<input name="survey_plan_number" required maxlength="100" /></label><label>Surveyor's full name<input name="surveyor_full_name" required maxlength="200" /></label><label>Surveyor registration number <span class="field-optional">Optional</span><input name="surveyor_registration_number" maxlength="100" /></label><label>Survey date<input name="survey_date" type="date" required /></label><label>Stated land area<input name="stated_area" type="number" min="0.0001" step="0.0001" required /></label><label>Measurement unit<select name="area_unit" required><option value="sqm">Square metres (m²)</option><option value="ha">Hectares (ha)</option><option value="acres">Acres</option><option value="sqft">Square feet (ft²)</option></select></label><label>State <span class="field-optional">Optional</span><input name="state" maxlength="100" /></label><label>LGA <span class="field-optional">Optional</span><input name="local_government_area" maxlength="100" /></label></div><label>Location description <span class="field-optional">Optional</span><textarea name="location_description" rows="2" maxlength="2000"></textarea></label><div class="form-grid"><label>Coordinate reference system <span class="field-optional">Optional</span><input name="coordinate_reference_system" maxlength="150" /></label><label>Datum <span class="field-optional">Optional</span><input name="datum" maxlength="100" /></label></div><label>Additional notes <span class="field-optional">Optional</span><textarea name="notes" rows="2" maxlength="4000"></textarea></label><label>Survey plan document (PDF)<input name="document" type="file" accept=".pdf,application/pdf" required /></label><progress class="survey-upload-progress" max="100" value="0" hidden></progress><p class="survey-upload-progress-label muted" hidden></p><p class="form-error" hidden role="alert"></p><div class="form-actions">${button("Cancel", "close-modal", "secondary")}<button class="button primary" type="submit">Upload survey plan</button></div></form>` : `<div class="empty">There are no allocations available for survey plan upload.</div>`}</section></div>`;
+}
+
+export function surveyPlanDetailsModal() {
+  const plan = data.surveyPlans.find((item) => item.id === state.selectedSurveyPlanId);
+  if (!plan) return "";
+  const history = (plan.verification_history || []).map((event) =>
+    `<li>${escapeHtml(event.previous_status || "New")} → ${escapeHtml(event.new_status)} · ${escapeHtml(event.actor || "Unknown reviewer")} · ${new Date(event.created_at).toLocaleString()}${event.notes ? `<p>${escapeHtml(event.notes)}</p>` : ""}</li>`,
+  ).join("");
+  const unitLabels = { sqm: "m²", ha: "ha", acres: "acres", sqft: "ft²" };
+  return `<div class="modal-backdrop"><section class="modal workflow-modal" role="dialog" aria-modal="true" aria-labelledby="survey-detail-title"><header class="modal-header"><div><p class="eyebrow">Individual survey plan</p><h2 id="survey-detail-title">${escapeHtml(plan.survey_plan_number || plan.name)}</h2><p>${escapeHtml(plan.original_filename || "No document attached")} · ${escapeHtml(plan.verification_status.replaceAll("_", " "))}</p></div><button class="close" aria-label="Close" data-action="close-modal">×</button></header><form id="survey-plan-edit-form" class="workflow-form"><div class="form-grid"><label>Survey plan number<input name="survey_plan_number" required maxlength="100" value="${escapeHtml(plan.survey_plan_number || "")}" /></label><label>Surveyor's full name<input name="surveyor_full_name" required maxlength="200" value="${escapeHtml(plan.surveyor_full_name || "")}" /></label><label>Surveyor registration number<input name="surveyor_registration_number" maxlength="100" value="${escapeHtml(plan.surveyor_registration_number || "")}" /></label><label>Survey date<input name="survey_date" type="date" required value="${escapeHtml(plan.survey_date || "")}" /></label><label>Stated land area<input name="stated_area" type="number" min="0.0001" step="0.0001" required value="${escapeHtml(plan.stated_area || "")}" /></label><label>Measurement unit<select name="area_unit">${Object.entries(unitLabels).map(([value, label]) => `<option value="${value}" ${plan.area_unit === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>State<input name="state" maxlength="100" value="${escapeHtml(plan.state || "")}" /></label><label>LGA<input name="local_government_area" maxlength="100" value="${escapeHtml(plan.local_government_area || "")}" /></label></div><label>Location description<textarea name="location_description" rows="2" maxlength="2000">${escapeHtml(plan.location_description || "")}</textarea></label><div class="form-grid"><label>Coordinate reference system<input name="coordinate_reference_system" maxlength="150" value="${escapeHtml(plan.coordinate_reference_system || "")}" /></label><label>Datum<input name="datum" maxlength="100" value="${escapeHtml(plan.datum || "")}" /></label></div><label>Additional notes<textarea name="notes" rows="2" maxlength="4000">${escapeHtml(plan.notes || "")}</textarea></label><p class="form-error" hidden role="alert"></p><div class="form-actions">${button("Save metadata", `save-survey:${plan.id}`, "secondary")}${plan.download_path ? button("View PDF", `view-survey-document:${plan.id}`, "secondary") : ""}${button("Download PDF", `download-survey:${plan.id}`, "secondary")}</div></form><section class="workflow-form"><label>Verification notes<textarea id="survey-verification-notes" rows="2" maxlength="4000">${escapeHtml(plan.verification_notes || "")}</textarea></label><div class="form-actions">${["under_review", "verified", "rejected", "disputed", "pending"].map((status) => button(status.replaceAll("_", " "), `verify-survey:${plan.id}:${status}`, status === "verified" ? "primary" : "secondary", "small")).join("")}</div><p class="muted">Verification is an internal company review, not independent government certification or legal confirmation of title.</p><h3>Verification history</h3>${history ? `<ol class="verification-history">${history}</ol>` : `<p class="muted">No verification changes have been recorded.</p>`}</section></section></div>`;
 }
 
 export function parcelModal() {
-  const parcel = state.selectedParcel;
-  return /* HTML */ `<div class="modal-backdrop">
-    <section class="modal" role="dialog" aria-modal="true">
-      <header class="modal-header">
-        <div>
-          <p class="eyebrow">Parcel detail</p>
-          <h2>Plot ${parcel.plot}, Block ${parcel.block}</h2>
-          <p>Abeni Gardens Estate · ${parcel.area}</p>
-        </div>
-        <button
-          class="close"
-          aria-label="Close parcel details"
-          data-action="close-modal"
-        >
-          ×
-        </button>
-      </header>
-      <section class="boundary-panel" style="min-height:270px">
-        ${parcelSvg()}
-        <div class="boundary-top">
-          <span>Example surveyed boundary</span><span>N ↑</span>
-        </div>
-      </section>
-      <section class="two-column" style="margin-top:17px">
-        <article class="panel">
-          <div class="detail-list">
-            <div><span>Status</span>${status(parcel.status)}</div>
-            <div>
-              <span>Assigned person</span><strong>${parcel.person}</strong>
-            </div>
-            <div><span>Survey plan</span><strong>SP/AG/2026/014</strong></div>
-          </div>
-        </article>
-        <article class="panel">
-          <div class="detail-list">
-            <div><span>Area</span><strong>${parcel.area}</strong></div>
-            <div><span>Perimeter</span><strong>103.74 m</strong></div>
-            <div><span>Geometry</span><strong>Validated sample</strong></div>
-          </div>
-        </article>
-      </section>
-      <div class="form-actions">
-        ${parcel.status === "Available" ? button("Allocate property", "open-allocation", "primary") : button("Close", "close-modal", "secondary")}
-      </div>
-    </section>
-  </div>`;
+  return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-header"><div><p class="eyebrow">Parcel detail</p><h2>Parcel record</h2></div><button class="close" aria-label="Close" data-action="close-modal">×</button></header><p>Parcel details are available from verified backend records.</p><div class="form-actions">${button("Close", "close-modal", "secondary")}</div></section></div>`;
 }

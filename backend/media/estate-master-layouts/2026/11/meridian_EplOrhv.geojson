@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "crs": {"type": "name", "properties": {"name": "EPSG:4326"}}, "features": [{"type": "Feature", "properties": {"plot_number": "O-1", "block": "A"}, "geometry": {"type": "Polygon", "coordinates": [[[3.4, 6.4], [3.5, 6.4], [3.5, 6.5], [3.4, 6.4]]]}}]}

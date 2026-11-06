@@ -2,9 +2,9 @@
   "name": "terraledger-frontend",
   "private": true,
   "version": "1.0.0",
-  "description": "Static frontend demonstration for TerraLedger.",
+  "description": "TerraLedger frontend for verified land-record access.",
   "scripts": {
-    "start": "npm run build:css && python -m http.server 8000 --directory .",
+    "start": "npm run build:css && python -m http.server 8080 --directory .",
     "build:css": "tailwindcss -i ./styles.css -o ./dist/tailwind.css --minify",
     "dev:css": "tailwindcss -i ./styles.css -o ./dist/tailwind.css --watch"
   },
