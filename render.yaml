@@ -1,6 +1,6 @@
 databases:
   - name: lprecision-db
-    plan: 256mb
+    plan: 0.1c-256mb
     databaseName: lprecision
     user: lprecision
 
