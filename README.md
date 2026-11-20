@@ -22,27 +22,35 @@ Start the Django account backend in a second terminal:
 ```powershell
 cd backend
 .\.lpvenv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver 127.0.0.1:8000
-```
-
-By default, the backend uses SQLite. To use PostgreSQL, install the backend
-requirements and set these variables in the same PowerShell terminal before
-running migrations and the server:
-
-```powershell
+$env:DJANGO_DEBUG = "1"
 $env:PGDATABASE = "lprecision"
 $env:PGUSER = "postgres"
 $env:PGPASSWORD = "your-local-password"
 $env:PGHOST = "127.0.0.1"
 $env:PGPORT = "5432"
+python -m pip install -r requirements.txt
 python manage.py migrate
 python manage.py runserver 127.0.0.1:8000
 ```
 
-Create the `lprecision` database in PostgreSQL first. Keep real database
-passwords in environment variables, not committed settings files.
+For local HTTP development, set `DJANGO_DEBUG=1` in that terminal. Production
+requires `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`,
+`TERRALEDGER_CORS_ALLOWED_ORIGINS`, and `TERRALEDGER_CSRF_TRUSTED_ORIGINS` to
+be configured through the deployment environment or secret store. Leave
+`DJANGO_DEBUG` unset in production: HTTPS-only cookies, HTTPS redirects, HSTS,
+and strict security headers are then enabled automatically. Use a shared cache
+for production login throttling when more than one application instance runs.
+
+PostgreSQL is required. Create the `lprecision` database first, then configure
+either the `PG*` variables shown above or a single `DATABASE_URL` value. The
+Render deployment uses `DATABASE_URL` from its managed PostgreSQL instance:
+
+```powershell
+$env:DATABASE_URL = "postgresql://user:password@host:5432/lprecision"
+```
+
+Keep real database passwords in environment variables, not committed settings
+files.
 
 The sign-in and registration forms use Django session cookies and CSRF
 protection. Create an account in the frontend at `/property/`, or sign in with
@@ -79,8 +87,20 @@ rebuild Tailwind CSS when `styles.css` changes.
 The browser uses these separate frontend endpoints:
 
 - `/` — public landing page
-- `/admin/` — administrator workspace
+- `/workspace/` — administrator workspace
 - `/property/` — property-holder invitation and dashboard journey
+
+`/admin/` remains Django's built-in administration interface.
+
+## Render deployment
+
+The repository includes `render.yaml` and `build.sh` for a PostgreSQL-backed
+Render deployment. Create a Blueprint from the repository, supply the prompted
+SMTP variables, and let Render create the linked PostgreSQL database. The web
+service stores uploaded media on its encrypted persistent disk at `/var/data`;
+it is a single-instance configuration. The generated Render URL is used as the
+frontend origin automatically. Set `TERRALEDGER_FRONTEND_URL` after adding a
+custom domain.
 
 ## Administrative hierarchy
 

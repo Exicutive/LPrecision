@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.core import mail
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from .models import VerifiedEmail
 
 
@@ -75,7 +75,40 @@ class AccountApiTests(TestCase):
 		self.headers['HTTP_X_CSRFTOKEN'] = self.client.cookies['csrftoken'].value
 		signed_out = self.post_json('/api/accounts/logout/', {})
 		self.assertEqual(signed_out.status_code, 200)
+		self.assertEqual(signed_out['Cache-Control'], 'no-store, max-age=0, private')
+		self.assertEqual(signed_out['Clear-Site-Data'], '"cache"')
 		self.assertEqual(self.client.get('/api/accounts/me/').status_code, 401)
+
+	@override_settings(
+		LOGIN_ATTEMPT_LIMIT=2,
+		LOGIN_IP_ATTEMPT_LIMIT=20,
+		LOGIN_ATTEMPT_WINDOW_SECONDS=60,
+		LOGIN_LOCKOUT_SECONDS=60,
+	)
+	def test_login_is_temporarily_throttled_after_repeated_failures(self):
+		get_user_model().objects.create_user(
+			username='holder@example.com',
+			email='holder@example.com',
+			password='A-strong-password-42!',
+		)
+
+		first = self.post_json(
+			'/api/accounts/login/',
+			{'email': 'holder@example.com', 'password': 'wrong-password'},
+		)
+		locked = self.post_json(
+			'/api/accounts/login/',
+			{'email': 'holder@example.com', 'password': 'wrong-password'},
+		)
+		blocked = self.post_json(
+			'/api/accounts/login/',
+			{'email': 'holder@example.com', 'password': 'A-strong-password-42!'},
+		)
+
+		self.assertEqual(first.status_code, 401)
+		self.assertEqual(locked.status_code, 429)
+		self.assertEqual(locked['Retry-After'], '60')
+		self.assertEqual(blocked.status_code, 429)
 
 	def test_duplicate_email_is_rejected(self):
 		get_user_model().objects.create_user(

@@ -4,7 +4,7 @@ const feature = (icon, title, text) => `<article class="land-feature"><span>${ui
 
 export function publicView() {
   return `<div class="site-canvas">
-    <header class="site-nav"><a class="brand brand-light" href="#home">${brand()}</a><nav><a href="#system">How it works</a><a href="#trust">Trust centre</a></nav><div class="nav-actions">${button("Access my property", "auth", "nav-primary")}</div></header>
+    <header class="site-nav" id="home"><a class="brand brand-light" href="#home" aria-label="TerraLedger home">${brand()}</a><nav aria-label="Main navigation"><a href="#system">How it works</a><a href="#trust">Trust &amp; privacy</a></nav><div class="nav-actions">${button("Access my property", "auth", "nav-primary")}</div></header>
     <main>
       <section class="land-hero"><div class="hero-copy"><p class="kicker"><span></span> Land intelligence, made accountable</p><h1>Every plot has a <em>clearer story.</em></h1><p class="hero-lead">TerraLedger gives property holders one verified source for allocation, parcel and survey records.</p><div class="hero-actions">${button("Access my property", "auth", "hero-cta")}</div><div class="hero-proof"><div><strong>Verified access</strong><span>Records are issued to authorized holders</span></div><div><strong>Plot-led</strong><span>Records tied to actual parcels</span></div></div></div>
       <div class="hero-terrain"><div class="terrain-orbit orbit-one"></div><div class="terrain-orbit orbit-two"></div><div class="terrain-card"><div class="terrain-head"><span class="map-live"><i></i> Verified record</span><span>TL / 001</span></div>${parcelSvg(true)}<div class="terrain-footer"><div><span>Estate</span><strong>Digital parcel layer</strong></div><div><span>State</span><strong>Boundary ready</strong></div></div></div><div class="terrain-chip chip-one">Survey-linked</div><div class="terrain-chip chip-two">Allocation verified</div></div></section>
@@ -12,6 +12,22 @@ export function publicView() {
       <section class="land-section" id="system"><div class="section-intro"><p class="kicker"><span></span> A better record experience</p><h2>Your property.<br />Clearly recorded.</h2></div><div class="feature-rail">${feature("records", "Verified allocation", "See the property record that has been specifically allocated to your account.")}${feature("survey", "Survey context", "Review approved survey references and recorded boundary information.")}${feature("shield", "Protected access", "Your property data is released only after secure account authorization.")}</div></section>
       <section class="trust-panel" id="trust"><div><p class="kicker"><span></span> Privacy by design</p><h2>Visibility follows authority.</h2><p>Platform administration never becomes company access. Company administration never becomes access to another company’s records. A property allocation never becomes an administrative role.</p>${button("Explore secure property access", "auth", "dark-button")}</div><div class="trust-grid"><article><b>01</b><span>Platform<br />governance</span></article><article><b>02</b><span>Company<br />isolation</span></article><article><b>03</b><span>Property<br />privacy</span></article></div></section>
     </main>
-    <footer class="site-footer"><a class="brand brand-light" href="#home">${brand()}</a><span>© 2026 TerraLedger · Verified land records</span><span>Designed for clarity</span></footer>
+    <footer class="site-footer">
+      <div class="site-footer-main">
+        <div class="site-footer-brand">
+          <a class="brand brand-light" href="#home" aria-label="TerraLedger home">${brand()}</a>
+          <p>Clear, secure access to verified property allocation and survey records.</p>
+        </div>
+        <nav class="site-footer-nav" aria-label="Footer navigation">
+          <div><h2>Explore</h2><a href="#system">How it works</a><a href="#trust">Trust &amp; privacy</a></div>
+          <div><h2>Property holders</h2><button type="button" class="footer-access" data-action="auth">Access your property</button></div>
+        </nav>
+      </div>
+      <div class="site-footer-bottom">
+        <span>© ${new Date().getFullYear()} TerraLedger</span>
+        <span>Digital land records · Access with confidence</span>
+        <a href="#home">Back to top ↑</a>
+      </div>
+    </footer>
   </div>`;
 }

@@ -5,6 +5,7 @@ import smtplib
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.auth import (
     authenticate,
     get_user_model,
@@ -27,6 +28,47 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from .models import EmailChangeRequest, VerifiedEmail
 
 User = get_user_model()
+
+
+def _login_cache_key(scope, value):
+	"""Avoid putting an email address or IP address directly in cache keys."""
+	digest = hashlib.sha256(f'{scope}:{value}'.encode('utf-8')).hexdigest()
+	return f'accounts:login:{scope}:{digest}'
+
+
+def _login_limit_keys(request, email):
+	remote_address = request.META.get('REMOTE_ADDR', '')
+	return (
+		(_login_cache_key('email', email), settings.LOGIN_ATTEMPT_LIMIT),
+		(_login_cache_key('ip', remote_address), settings.LOGIN_IP_ATTEMPT_LIMIT),
+	)
+
+
+def _is_login_rate_limited(keys):
+	return any(cache.get(f'{key}:locked') for key, _limit in keys)
+
+
+def _record_failed_login(keys):
+	"""Record a failure and lock only after the configured threshold is reached."""
+	locked = False
+	for key, limit in keys:
+		if cache.add(key, 1, timeout=settings.LOGIN_ATTEMPT_WINDOW_SECONDS):
+			attempts = 1
+		else:
+			try:
+				attempts = cache.incr(key)
+			except ValueError:
+				cache.set(key, 1, timeout=settings.LOGIN_ATTEMPT_WINDOW_SECONDS)
+				attempts = 1
+		if attempts >= limit:
+			cache.set(f'{key}:locked', True, timeout=settings.LOGIN_LOCKOUT_SECONDS)
+			locked = True
+	return locked
+
+
+def _clear_email_login_failures(email):
+	cache.delete(_login_cache_key('email', email))
+	cache.delete(f'{_login_cache_key("email", email)}:locked')
 
 
 def _read_payload(request):
@@ -120,6 +162,15 @@ def sign_in(request):
 			{'detail': 'Email address and password are required.'}, status=400
 		)
 
+	limit_keys = _login_limit_keys(request, email)
+	if _is_login_rate_limited(limit_keys):
+		response = JsonResponse(
+			{'detail': 'Too many sign-in attempts. Please try again later.'},
+			status=429,
+		)
+		response['Retry-After'] = str(settings.LOGIN_LOCKOUT_SECONDS)
+		return response
+
 	user_record = User.objects.filter(email__iexact=email).first()
 	user = authenticate(
 		request,
@@ -127,8 +178,16 @@ def sign_in(request):
 		password=password,
 	)
 	if user is None:
+		if _record_failed_login(limit_keys):
+			response = JsonResponse(
+				{'detail': 'Too many sign-in attempts. Please try again later.'},
+				status=429,
+			)
+			response['Retry-After'] = str(settings.LOGIN_LOCKOUT_SECONDS)
+			return response
 		return JsonResponse({'detail': 'Email or password is incorrect.'}, status=401)
 
+	_clear_email_login_failures(email)
 	login(request, user)
 	return JsonResponse({'user': _user_data(user)})
 
@@ -143,7 +202,15 @@ def current_user(request):
 @require_POST
 def sign_out(request):
 	logout(request)
-	return JsonResponse({'detail': 'Signed out.'})
+	response = JsonResponse({'detail': 'Signed out.'})
+	response.delete_cookie(
+		settings.CSRF_COOKIE_NAME,
+		path=settings.CSRF_COOKIE_PATH,
+		domain=settings.CSRF_COOKIE_DOMAIN,
+		samesite=settings.CSRF_COOKIE_SAMESITE,
+	)
+	response['Clear-Site-Data'] = '"cache"'
+	return response
 
 
 @require_POST
@@ -227,7 +294,7 @@ def request_email_change(request):
 			expires_at=timezone.now() + timedelta(hours=24),
 		)
 	verification_url = (
-		f'{settings.FRONTEND_URL}/admin/?email_change={raw_token}'
+		f'{settings.FRONTEND_URL}/workspace/?email_change={raw_token}'
 	)
 	try:
 		sent = send_mail(

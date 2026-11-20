@@ -18,11 +18,23 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
+from lprecision.frontend_views import (
+    estate_image,
+    company_logo,
+    frontend_page,
+    healthz,
+)
 
 urlpatterns = [
+    path('healthz/', healthz, name='healthz'),
     path('admin/', admin.site.urls),
     path('api/accounts/', include('apps.accounts.urls')),
     path('api/records/', include('apps.records.urls')),
+    path('media/company-logos/<path:filename>', company_logo, name='company-logo'),
+    path('media/estate-images/<path:filename>', estate_image, name='estate-image'),
+    path('property/', frontend_page, {'page': 'property'}, name='property-portal'),
+    path('workspace/', frontend_page, {'page': 'workspace'}, name='admin-workspace'),
+    path('', frontend_page, {'page': 'public'}, name='public-site'),
 ]
 
 if settings.DEBUG:

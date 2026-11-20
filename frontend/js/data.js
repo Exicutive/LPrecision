@@ -18,7 +18,7 @@ export const data = {
   notificationPreferences: {},
 };
 
-export const currentEndpoint = window.location.pathname.includes("/admin/")
+export const currentEndpoint = window.location.pathname.includes("/workspace/")
   ? "admin"
   : window.location.pathname.includes("/property/")
     ? "property"

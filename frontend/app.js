@@ -8,10 +8,10 @@ import {
   surveyPlanUploadModal,
 } from "./js/views/modals.js?v=20261106-settings";
 import { invitationView, userView } from "./js/views/property.js?v=20261106-settings";
-import { publicView } from "./js/views/public.js?v=20261034";
+import { publicView } from "./js/views/public.js?v=20261106-header-footer";
 
 const app = document.querySelector("#app");
-const apiBase = `${window.location.protocol}//${window.location.hostname}:8000/api`;
+const apiBase = `${window.location.origin}/api`;
 const accountApi = `${apiBase}/accounts`;
 const recordsApi = `${apiBase}/records`;
 
@@ -50,6 +50,31 @@ async function accountRequest(path, { method = "GET", payload } = {}) {
     throw error;
   }
   return result;
+}
+
+function clearSensitiveClientState() {
+  Object.assign(data, {
+    estates: [], parcels: [], allocations: [], companies: [], auditEvents: [],
+    platformSummary: null, companySummary: null, estateOverview: null, estateDetail: null,
+    masterLayouts: [], masterLayoutDetail: null, extractionCandidates: [], surveyPlans: [],
+    surveyPlanSummary: { total: 0, pending: 0, verified: 0, disputed: 0 },
+    settings: {}, companySettings: null, notificationPreferences: {},
+  });
+  Object.assign(state, {
+    user: null, adminRole: null, activeCompanyId: null, propertyAllocations: [],
+    propertyAllocation: null, propertyDetail: null, selectedAllocationId: null,
+    selectedParcel: null, selectedEstateId: null, editingEstate: null, modal: null,
+    adminAuthorized: false, latestCompanyAdminInvitation: null,
+  });
+}
+
+async function signOut() {
+  await accountRequest("logout", { method: "POST", payload: {} });
+  clearSensitiveClientState();
+  state.view = state.allocationInvitationToken || state.companyAdminInvitationToken ? "invite" : "auth";
+  state.authMode = "signin";
+  window.history.replaceState({}, "", window.location.pathname + window.location.search);
+  render();
 }
 
 async function recordsRequest(path, { method = "GET", payload, formData } = {}) {
@@ -537,27 +562,6 @@ async function saveAccountProfile(form) {
   }
 }
 
-async function requestAccountEmailChange(form) {
-  const errorMessage = form.querySelector(".form-error");
-  const submitButton = form.querySelector('[type="submit"]');
-  errorMessage.hidden = true;
-  submitButton.disabled = true;
-  try {
-    const result = await accountRequest("email-change", {
-      method: "POST",
-      payload: { email: new FormData(form).get("email") },
-    });
-    state.toast = result.detail;
-    form.reset();
-    render();
-  } catch (error) {
-    errorMessage.textContent = error.message;
-    errorMessage.hidden = false;
-  } finally {
-    if (submitButton.isConnected) submitButton.disabled = false;
-  }
-}
-
 async function submitPasswordChange(form) {
   const errorMessage = form.querySelector(".form-error");
   const submitButton = form.querySelector('[type="submit"]');
@@ -743,7 +747,7 @@ async function submitAuthentication(form) {
     }
     if (currentEndpoint === "admin") {
       if (!result.user.is_platform_admin && !result.user.company_admin_companies?.length) {
-        await accountRequest("logout", { method: "POST", payload: {} });
+        await signOut();
         throw new Error("This account does not have administrator access.");
       }
       state.adminAuthorized = true;
@@ -844,10 +848,10 @@ function endpointUrl(endpoint) {
   if (endpoint === "public") return currentEndpoint === "public" ? "./" : "../";
   if (endpoint === "admin")
     return currentEndpoint === "public"
-      ? "admin/"
+      ? "workspace/"
       : currentEndpoint === "admin"
         ? "./"
-        : "../admin/";
+        : "../workspace/";
   return currentEndpoint === "public"
     ? "property/"
     : currentEndpoint === "property"
@@ -925,11 +929,6 @@ function bind() {
   if (accountProfileForm) accountProfileForm.addEventListener("submit", (event) => {
     event.preventDefault();
     saveAccountProfile(accountProfileForm);
-  });
-  const emailChangeForm = app.querySelector("#email-change-form");
-  if (emailChangeForm) emailChangeForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    requestAccountEmailChange(emailChangeForm);
   });
   const passwordChangeForm = app.querySelector("#password-change-form");
   if (passwordChangeForm) passwordChangeForm.addEventListener("submit", (event) => {
@@ -1069,13 +1068,7 @@ function handle(action) {
     });
     return;
   } else if (action === "allocation-signout") {
-    accountRequest("logout", { method: "POST", payload: {} })
-      .then(() => {
-        state.user = null;
-        state.view = "invite";
-        state.authMode = "signin";
-        render();
-      })
+    signOut()
       .catch((error) => {
         state.toast = error.message;
         render();
@@ -1150,13 +1143,7 @@ function handle(action) {
       });
     return;
   } else if (action === "logout") {
-    accountRequest("logout", { method: "POST", payload: {} })
-      .then(() => {
-        state.user = null;
-        state.view = state.allocationInvitationToken || state.companyAdminInvitationToken ? "invite" : "auth";
-        state.authMode = "signin";
-        render();
-      })
+    signOut()
       .catch(() => {
         state.toast = "Could not sign out. Check that the backend is running.";
         render();

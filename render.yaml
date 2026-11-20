@@ -1,0 +1,45 @@
+databases:
+  - name: lprecision-db
+    plan: 256mb
+    databaseName: lprecision
+    user: lprecision
+
+services:
+  - type: web
+    name: lprecision
+    runtime: python
+    plan: 1c-2g
+    buildCommand: bash build.sh
+    preDeployCommand: python backend/manage.py migrate
+    startCommand: gunicorn --chdir backend lprecision.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /healthz/
+    autoDeployTrigger: commit
+    disk:
+      name: lprecision-data
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lprecision-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: TERRALEDGER_DATA_ROOT
+        value: /var/data
+      - key: TERRALEDGER_EMAIL_BACKEND
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: EMAIL_USE_TLS
+        value: "true"

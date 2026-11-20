@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 import os
+import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,13 +22,29 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&2_^oto^z5cg(i+8tp=7@0s^za$*#jh#m)wv2x8*!kk$m%i5j5'
+def environment_flag(name, default=False):
+    """Read a boolean environment variable without treating arbitrary text as true."""
+    return os.environ.get(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
-ALLOWED_HOSTS = []
+# Debugging is off unless a local developer explicitly enables it. Refusing a
+# missing production secret prevents a deployment from silently using a
+# source-controlled credential.
+DEBUG = environment_flag('DJANGO_DEBUG', False)
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'development-only-key-change-before-deployment'
+    else:
+        raise ImproperlyConfigured('DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is not enabled.')
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+    if host.strip()
+]
+if render_hostname := os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+    ALLOWED_HOSTS.append(render_hostname)
 
 
 # Application definition
@@ -52,6 +70,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    'lprecision.middleware.PrivateApiCacheControlMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -61,15 +81,50 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    'http://127.0.0.1:8080',
-    'http://localhost:8080',
-]
+def environment_list(name, default=''):
+    return [item.strip() for item in os.environ.get(name, default).split(',') if item.strip()]
+
+
+CORS_ALLOWED_ORIGINS = environment_list(
+    'TERRALEDGER_CORS_ALLOWED_ORIGINS',
+    'http://127.0.0.1:8080,http://localhost:8080' if DEBUG else '',
+)
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
-    'http://127.0.0.1:8080',
-    'http://localhost:8080',
-]
+CSRF_TRUSTED_ORIGINS = environment_list(
+    'TERRALEDGER_CSRF_TRUSTED_ORIGINS',
+    'http://127.0.0.1:8080,http://localhost:8080' if DEBUG else '',
+)
+
+# Session and CSRF cookies are never available to JavaScript. The CSRF cookie
+# remains readable by the frontend because it is a double-submit token, not an
+# authentication credential.
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_AGE = int(os.environ.get('TERRALEDGER_SESSION_AGE_SECONDS', '28800'))
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# These settings are effective only outside local DEBUG mode, allowing HTTP
+# development while making secure transport the production default.
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_HSTS_SECONDS = 31_536_000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+
+# Limits apply to a normalized email address and, separately, to the remote
+# address. Configure a shared Django cache in a multi-worker deployment so the
+# protection is consistent across instances.
+LOGIN_ATTEMPT_LIMIT = int(os.environ.get('TERRALEDGER_LOGIN_ATTEMPT_LIMIT', '5'))
+LOGIN_IP_ATTEMPT_LIMIT = int(os.environ.get('TERRALEDGER_LOGIN_IP_ATTEMPT_LIMIT', '20'))
+LOGIN_ATTEMPT_WINDOW_SECONDS = int(os.environ.get('TERRALEDGER_LOGIN_ATTEMPT_WINDOW_SECONDS', '900'))
+LOGIN_LOCKOUT_SECONDS = int(os.environ.get('TERRALEDGER_LOGIN_LOCKOUT_SECONDS', '900'))
 
 ROOT_URLCONF = 'lprecision.urls'
 
@@ -94,7 +149,16 @@ WSGI_APPLICATION = 'lprecision.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-if os.environ.get('PGDATABASE'):
+if os.environ.get('DATABASE_URL'):
+    # Render provides the managed PostgreSQL connection as DATABASE_URL.  Keep
+    # connections reusable but validate them before reuse after an idle period.
+    DATABASES = {
+        'default': dj_database_url.config(
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+elif os.environ.get('PGDATABASE'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -106,12 +170,9 @@ if os.environ.get('PGDATABASE'):
         }
     }
 else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+    raise ImproperlyConfigured(
+        'PostgreSQL must be configured with DATABASE_URL or PGDATABASE.'
+    )
 
 
 # Password validation
@@ -148,11 +209,24 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR.parent / "frontend"]
+
+STORAGES = {
+    "staticfiles": {
+        # The frontend is a native ES-module application. Its module imports
+        # use stable URLs, so retain the original asset names rather than
+        # switching them to manifest hashes during collectstatic.
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    }
+}
+
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+DATA_ROOT = Path(os.environ.get('TERRALEDGER_DATA_ROOT', BASE_DIR))
+MEDIA_ROOT = DATA_ROOT / 'media'
 PRIVATE_MEDIA_ROOT = Path(
-    os.environ.get('TERRALEDGER_PRIVATE_MEDIA_ROOT', BASE_DIR / 'private_media')
+    os.environ.get('TERRALEDGER_PRIVATE_MEDIA_ROOT', DATA_ROOT / 'private_media')
 )
 
 
@@ -175,7 +249,10 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '').lower() in ('1', 'true', 'ye
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', '').lower() in ('1', 'true', 'yes')
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@terraledger.local')
-FRONTEND_URL = os.environ.get('TERRALEDGER_FRONTEND_URL', 'http://127.0.0.1:8080').rstrip('/')
+FRONTEND_URL = os.environ.get(
+    'TERRALEDGER_FRONTEND_URL',
+    f"https://{render_hostname}" if render_hostname else 'http://127.0.0.1:8080',
+).rstrip('/')
 ALLOCATION_INVITATION_EXPIRY_DAYS = int(
     os.environ.get('TERRALEDGER_ALLOCATION_INVITATION_DAYS', '7')
 )
