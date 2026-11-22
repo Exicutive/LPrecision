@@ -2555,6 +2555,119 @@
     }
   }
 
+  /* Mobile interaction and overflow safeguards. These sit after the visual
+     component rules so they apply consistently to public, admin, and property
+     views without changing the desktop workspace. */
+  @media (max-width: 800px) {
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      overflow-x: hidden;
+    }
+    .sidebar {
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(7px + env(safe-area-inset-bottom));
+    }
+    .side-nav {
+      width: max-content;
+      min-width: 100%;
+    }
+    .app-header {
+      flex-wrap: wrap;
+    }
+    .breadcrumb {
+      flex: 1 1 100%;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .header-tools {
+      flex: 1 1 100%;
+    }
+    .button,
+    .filters input,
+    .filters select,
+    .field input,
+    .field select,
+    .field textarea,
+    .workflow-form input,
+    .workflow-form select,
+    .workflow-form textarea,
+    .auth-form input {
+      min-height: 44px;
+    }
+    .field input,
+    .field select,
+    .field textarea,
+    .workflow-form input,
+    .workflow-form select,
+    .workflow-form textarea,
+    .auth-form input {
+      font-size: 16px;
+    }
+    .panel,
+    .property-record,
+    .auth-card {
+      max-width: 100%;
+    }
+    .detail-list strong,
+    .survey-plan-card strong,
+    .survey-plan-card span,
+    .table-title,
+    .subcell {
+      overflow-wrap: anywhere;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .public-header > div,
+    .hero,
+    .public-section,
+    .public-footer > div {
+      padding-right: 18px;
+      padding-left: 18px;
+    }
+    .hero {
+      padding-top: 46px;
+      padding-bottom: 46px;
+      gap: 34px;
+    }
+    .hero h1 {
+      font-size: clamp(38px, 12vw, 52px);
+    }
+    .hero-actions,
+    .form-actions {
+      gap: 9px;
+    }
+    .hero-actions .button,
+    .form-actions .button {
+      flex: 1 1 100%;
+    }
+    .parcel-preview {
+      min-height: 330px;
+    }
+    .feature-grid,
+    .steps,
+    .public-footer > div {
+      grid-template-columns: 1fr;
+    }
+    .public-footer .footer-links:last-child {
+      display: block;
+    }
+    .page-head p,
+    .dashboard-hero p,
+    .property-location {
+      font-size: 13px;
+    }
+    .data-table {
+      min-width: 560px;
+    }
+  }
+
   @layer components {
     .site-nav {
       position: sticky;

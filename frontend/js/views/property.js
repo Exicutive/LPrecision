@@ -6,7 +6,7 @@ const initials = (name) => name.split(/\s+/).filter(Boolean).map((part) => part[
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[character]);
-const recordsApi = `${window.location.protocol}//${window.location.hostname}:8000/api/records`;
+const recordsApi = `${window.location.origin}/api/records`;
 
 export function invitationView() {
   const allocationInvite = Boolean(state.allocationInvitationToken);
