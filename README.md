@@ -229,3 +229,17 @@ invitations.
 Production email delivery, virus/file-type validation for uploads, approved
 document storage, and legal/survey review workflows should be configured before
 handling real customer records.
+
+### Transactional email with Resend
+
+On Render Free, SMTP ports are blocked. Configure Resend's HTTPS API instead:
+
+```text
+RESEND_API_KEY=re_...
+DEFAULT_FROM_EMAIL=TerraLedger <no-reply@your-verified-domain.example>
+```
+
+When `RESEND_API_KEY` is present, TerraLedger automatically uses the Resend
+email backend for password resets, Company Admin invitations, allocation
+invitations, and notifications. Verify the sender domain in Resend first; do
+not commit the API key.

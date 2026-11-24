@@ -59,6 +59,7 @@ class SurveyPlan(models.Model):
     coordinate_reference_system = models.CharField(max_length=150, blank=True)
     datum = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
+    submitted_boundary_coordinates = models.JSONField(default=list, blank=True)
     original_filename = models.CharField(max_length=255, blank=True)
     document = models.FileField(
         upload_to="survey-plans/%Y/%m/", storage=PrivateSurveyPlanStorage(), blank=True

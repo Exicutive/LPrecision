@@ -13,9 +13,6 @@ logger = logging.getLogger(__name__)
 
 NOTIFICATION_TYPES = {
     "property_allocation": "Property allocation notifications",
-    "survey_plan_upload": "Survey plan upload notifications",
-    "survey_plan_verification": "Survey plan verification notifications",
-    "master_layout_processing": "Master layout processing notifications",
 }
 
 

@@ -12,9 +12,6 @@ from apps.companies.models import Company, CompanyMembership
 User = get_user_model()
 NOTIFICATION_TYPES = (
     "property_allocation",
-    "survey_plan_upload",
-    "survey_plan_verification",
-    "master_layout_processing",
 )
 
 
@@ -139,11 +136,3 @@ class CompanySettingsApiTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.admin.email])
 
-        with self.captureOnCommitCallbacks(execute=True):
-            schedule_company_notification(
-                company_id=self.company.pk,
-                notification_type="survey_plan_upload",
-                subject="Survey upload alert",
-                message="A survey plan was uploaded.",
-            )
-        self.assertEqual(len(mail.outbox), 1)

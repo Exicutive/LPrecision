@@ -147,6 +147,27 @@ class AdministrativeHierarchyTests(TestCase):
         self.company_two.refresh_from_db()
         self.assertEqual(self.company_two.setup_status, Company.SetupStatus.COMPLETE)
 
+    @patch("apps.platform_admin.views.send_mail", side_effect=OSError("Email unavailable"))
+    def test_company_admin_invitation_can_be_copied_when_email_delivery_fails(self, _send_mail):
+        client = Client()
+        client.force_login(self.platform_user)
+
+        response = self.post(
+            client,
+            "/api/records/platform/companies/%s/invite-first-admin/" % self.company_two.pk,
+            {"email": "new-admin@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("invitation_url", response.json())
+        self.assertIn("email_delivery_warning", response.json())
+        self.assertTrue(
+            self.company_two.admin_invitations.filter(
+                email="new-admin@example.com",
+                status="pending",
+            ).exists()
+        )
+
     def test_invitation_validation_prevents_orphaned_account_creation(self):
         client = Client()
         invalid = self.post(client, "/api/records/company-admin-invitations/accept/", {

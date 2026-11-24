@@ -2,6 +2,7 @@ import json
 import hashlib
 import os
 import secrets
+import smtplib
 import uuid
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
@@ -186,6 +187,7 @@ def platform_invite_first_company_admin(request, company_id):
         return JsonResponse({"detail": "Enter a valid email address."}, status=400)
     now = timezone.now()
     raw_token = secrets.token_urlsafe(32)
+    acceptance_url = f"{settings.FRONTEND_URL}/property/?company_admin_invitation={raw_token}"
     with transaction.atomic():
         company.admin_invitations.filter(status=CompanyAdminInvitation.Status.PENDING).update(
             status=CompanyAdminInvitation.Status.REVOKED
@@ -197,8 +199,14 @@ def platform_invite_first_company_admin(request, company_id):
             invited_by=request.user,
             expires_at=now + timedelta(days=7),
         )
-        acceptance_url = f"{settings.FRONTEND_URL}/property/?company_admin_invitation={raw_token}"
-        send_mail(
+    # A valid invitation must not depend on an SMTP server being available.
+    # This is particularly important for deployments that use a transactional
+    # email API or a platform that blocks SMTP. The authenticated Platform
+    # Admin receives the one-time URL in the response and can send it to the
+    # invited address through an approved channel when email delivery fails.
+    email_delivered = False
+    try:
+        accepted_count = send_mail(
             f"You're invited to manage {company.name} on TerraLedger",
             (
                 f"You have been invited to become an administrator for {company.name}.\n\n"
@@ -208,14 +216,26 @@ def platform_invite_first_company_admin(request, company_id):
             [email],
             fail_silently=False,
         )
+        email_delivered = (
+            accepted_count == 1
+            and settings.EMAIL_BACKEND != "django.core.mail.backends.console.EmailBackend"
+        )
+    except (OSError, smtplib.SMTPException, RuntimeError):
+        pass
     log_event(actor=request.user, action="company_admin.invited", company=company, details={"email": email})
-    response = {"invitation": _invitation_data(invitation)}
-    if settings.DEBUG:
-        response["invitation_token"] = raw_token
-        # Local development does not have a real outbound email service by
-        # default. Returning the same URL shown in the development mail
-        # console lets the Platform Admin test the exact, current invitation.
-        response["invitation_url"] = acceptance_url
+    response = {
+        "invitation": _invitation_data(invitation),
+        # The URL is an invitation credential. It is returned only to the
+        # authenticated Platform Admin who issued it, never in list/status
+        # endpoints or to unauthenticated callers.
+        "invitation_url": acceptance_url,
+        "email_delivered": email_delivered,
+    }
+    if not email_delivered:
+        response["email_delivery_warning"] = (
+            "Email delivery was unavailable. Copy the invitation link and send it only "
+            "to the invited email address through an approved channel."
+        )
     return JsonResponse(response, status=201)
 
 @require_GET

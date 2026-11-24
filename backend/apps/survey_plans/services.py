@@ -1,4 +1,6 @@
 import hashlib
+import json
+import math
 import os
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -102,23 +104,55 @@ def validate_survey_plan_metadata(payload):
     return values
 
 
-def create_survey_plan(*, company, allocation_id, uploaded_file, metadata, user):
+def validate_boundary_coordinates(value):
+    """Validate optional [longitude/easting, latitude/northing] vertex pairs."""
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as error:
+            raise SurveyPlanUploadError(
+                "Boundary coordinates must be a JSON list of [x, y] pairs."
+            ) from error
+    if not isinstance(value, list) or not (3 <= len(value) <= 1000):
+        raise SurveyPlanUploadError("Provide between 3 and 1,000 boundary coordinate pairs.")
+    coordinates = []
+    for point in value:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise SurveyPlanUploadError("Each boundary coordinate must be an [x, y] pair.")
+        try:
+            x, y = float(point[0]), float(point[1])
+        except (TypeError, ValueError) as error:
+            raise SurveyPlanUploadError("Boundary coordinates must be numbers.") from error
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise SurveyPlanUploadError("Boundary coordinates must be finite numbers.")
+        coordinates.append([x, y])
+    return coordinates
+
+
+def create_survey_plan(*, company, allocation_id, uploaded_file, metadata, user, recipient=None):
     filename, checksum = validate_survey_plan_upload(uploaded_file)
     values = validate_survey_plan_metadata(metadata)
+    submitted_boundary_coordinates = validate_boundary_coordinates(metadata.get("boundary_coordinates"))
     plan = None
     try:
         with transaction.atomic():
-            allocation = (
-                Allocation.objects.select_for_update()
-                .select_related("parcel__estate__company")
-                .filter(
-                    pk=allocation_id,
-                    parcel__estate__company=company,
+            allocation_query = Allocation.objects.select_for_update().select_related(
+                "parcel__estate__company"
+            ).filter(pk=allocation_id, parcel__estate__company=company)
+            if recipient is not None:
+                allocation_query = allocation_query.filter(
+                    allottee=recipient,
+                    status=Allocation.Status.ACTIVE,
                 )
-                .first()
-            )
+            allocation = allocation_query.first()
             if not allocation:
-                raise SurveyPlanUploadError("Choose an allocation belonging to this company.")
+                message = (
+                    "You can only upload a survey plan for an active property linked to your account."
+                    if recipient is not None else "Choose an allocation belonging to this company."
+                )
+                raise SurveyPlanUploadError(message)
             if allocation.status == Allocation.Status.REVOKED:
                 raise SurveyPlanUploadError("A survey plan cannot be uploaded for a revoked allocation.")
 
@@ -149,13 +183,20 @@ def create_survey_plan(*, company, allocation_id, uploaded_file, metadata, user)
                 checksum=checksum,
                 extracted_metadata={
                     "status": "manual_required",
-                    "message": "Automated survey-plan OCR is not configured; metadata must be entered and reviewed manually.",
+                    "message": "Automated survey-plan OCR is not configured; metadata was supplied with the upload.",
                 },
+                submitted_boundary_coordinates=submitted_boundary_coordinates,
                 **values,
             )
             plan.full_clean(exclude=("document",))
             plan.document = uploaded_file
             plan.save()
+            if submitted_boundary_coordinates:
+                allocation.parcel.boundary_coordinates = submitted_boundary_coordinates
+                allocation.parcel.perimeter_m = None
+                allocation.parcel.save(update_fields=(
+                    "boundary_coordinates", "perimeter_m", "updated_at",
+                ))
             return plan, True
     except IntegrityError as error:
         if plan and plan.document:

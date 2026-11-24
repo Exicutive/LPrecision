@@ -237,9 +237,14 @@ PRIVATE_MEDIA_ROOT = Path(
 # mapping). In local development, invitation emails therefore appear in the
 # backend terminal; set TERRALEDGER_EMAIL_BACKEND and the usual SMTP settings
 # when deploying a real mail provider.
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 EMAIL_BACKEND = os.environ.get(
     'TERRALEDGER_EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend',
+    (
+        'apps.accounts.email_backends.ResendEmailBackend'
+        if RESEND_API_KEY
+        else 'django.core.mail.backends.console.EmailBackend'
+    ),
 )
 EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
@@ -249,6 +254,10 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '').lower() in ('1', 'true', 'ye
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', '').lower() in ('1', 'true', 'yes')
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@terraledger.local')
+if RESEND_API_KEY and DEFAULT_FROM_EMAIL.endswith('.local'):
+    raise ImproperlyConfigured(
+        'DEFAULT_FROM_EMAIL must be a verified Resend sender address when RESEND_API_KEY is set.'
+    )
 FRONTEND_URL = os.environ.get(
     'TERRALEDGER_FRONTEND_URL',
     f"https://{render_hostname}" if render_hostname else 'http://127.0.0.1:8080',

@@ -44,31 +44,50 @@ export function brand() {
     </span>`;
 }
 
-export function parcelSvg(dark = false) {
+export function parcelSvg(dark = false, coordinates = []) {
   const stroke = dark ? "#d9f8e6" : "#0c725e";
   const fill = dark ? "rgba(185,228,106,.26)" : "rgba(86,187,143,.20)";
   const text = dark ? "#fff" : "#094c3d";
+  const points = Array.isArray(coordinates)
+    ? coordinates.map((point) => Array.isArray(point) && point.length === 2
+      ? [Number(point[0]), Number(point[1])] : null).filter((point) => point?.every(Number.isFinite))
+    : [];
+  const hasBoundary = points.length >= 3;
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const polygonPoints = hasBoundary
+    ? points.map(([x, y]) => `${70 + ((x - minX) / spanX) * 420},${265 - ((y - minY) / spanY) * 200}`).join(" ")
+    : "100,65 440,65 475,240 135,275 65,190";
+  const vertices = hasBoundary
+    ? points.map(([x, y]) => {
+      const px = 70 + ((x - minX) / spanX) * 420;
+      const py = 265 - ((y - minY) / spanY) * 200;
+      return `<circle cx="${px}" cy="${py}" r="7" />`;
+    }).join("")
+    : "<circle cx=\"100\" cy=\"65\" r=\"8\" /><circle cx=\"440\" cy=\"65\" r=\"8\" /><circle cx=\"490\" cy=\"240\" r=\"8\" /><circle cx=\"132\" cy=\"287\" r=\"8\" /><circle cx=\"58\" cy=\"182\" r=\"8\" />";
 
   return /* HTML */ `<svg
     class="boundary-svg"
     viewBox="0 0 560 330"
     preserveAspectRatio="xMidYMid meet"
     role="img"
-    aria-label="Boundary data placeholder"
+    aria-label="${hasBoundary ? "Plot boundary preview" : "Boundary coordinates pending"}"
   >
     <polygon
-      points="100,65 440,65 475,240 135,275 65,190"
+      points="${polygonPoints}"
       fill="${fill}"
       stroke="${stroke}"
       stroke-width="4"
     />
     <g fill="${stroke}" stroke="#fff" stroke-width="3">
-      <circle cx="100" cy="65" r="8" />
-      <circle cx="440" cy="65" r="8" />
-      <circle cx="490" cy="240" r="8" />
-      <circle cx="132" cy="287" r="8" />
-      <circle cx="58" cy="182" r="8" />
+      ${vertices}
     </g>
-    <text x="160" y="165" fill="${text}" font-size="18" font-weight="700">Boundary data loads from an approved record</text>
+    <text x="${hasBoundary ? "145" : "160"}" y="165" fill="${text}" font-size="18" font-weight="700">${hasBoundary ? "Boundary coordinates" : "Boundary coordinates pending"}</text>
   </svg>`;
 }

@@ -10,7 +10,7 @@ from apps.allocations.models import Allocation
 from apps.companies.models import Company, CompanyMembership
 from apps.estates.models import Estate
 from apps.parcels.models import Parcel
-from apps.survey_plans.models import SurveyPlan, SurveyPlanVerificationEvent
+from apps.survey_plans.models import SurveyPlan
 
 
 User = get_user_model()
@@ -67,6 +67,8 @@ class SurveyPlanWorkflowTests(TestCase):
         )
         self.client = Client()
         self.client.force_login(self.admin)
+        self.recipient_client = Client()
+        self.recipient_client.force_login(self.recipient)
 
     def upload_data(self, *, allocation_id=None, document=None, **overrides):
         values = {
@@ -92,8 +94,8 @@ class SurveyPlanWorkflowTests(TestCase):
         )
         return values
 
-    def upload_url(self, company_id=None):
-        return f"/api/records/companies/{company_id or self.company.pk}/survey-plans/"
+    def upload_url(self, allocation_id=None):
+        return f"/api/records/my-property/{allocation_id or self.allocation.pk}/survey-plans/"
 
     def track_uploaded_file(self, response):
         plan = SurveyPlan.objects.get(pk=response.json()["survey_plan"]["id"])
@@ -102,96 +104,73 @@ class SurveyPlanWorkflowTests(TestCase):
         self.addCleanup(storage.delete, filename)
         return plan
 
-    def test_company_admin_uploads_pdf_linked_to_allocation(self):
-        response = self.client.post(self.upload_url(), self.upload_data())
+    def test_property_holder_uploads_pdf_linked_to_own_allocation(self):
+        response = self.recipient_client.post(self.upload_url(), self.upload_data())
         self.assertEqual(response.status_code, 201)
         plan = self.track_uploaded_file(response)
         self.assertEqual(plan.allocation_id, self.allocation.pk)
         self.assertEqual(plan.parcel_id, self.parcel.pk)
         self.assertEqual(plan.estate_id, self.estate.pk)
         self.assertEqual(plan.company_id, self.company.pk)
-        self.assertEqual(plan.verification_status, SurveyPlan.VerificationStatus.PENDING)
         self.assertEqual(plan.area_unit, SurveyPlan.AreaUnit.SQUARE_METRES)
         self.assertEqual(plan.extracted_metadata["status"], "manual_required")
 
-    def test_upload_requires_authentication_and_company_membership(self):
+    def test_upload_requires_authenticated_linked_property_holder(self):
         anonymous = Client().post(self.upload_url(), self.upload_data())
         self.assertEqual(anonymous.status_code, 302)
 
-        forbidden = self.client.post(
-            self.upload_url(self.other_company.pk), self.upload_data()
-        )
-        self.assertEqual(forbidden.status_code, 403)
+        forbidden = self.client.post(self.upload_url(), self.upload_data())
+        self.assertEqual(forbidden.status_code, 404)
 
     def test_upload_rejects_unrelated_allocation_and_invalid_or_missing_pdf(self):
-        unrelated = self.client.post(
-            self.upload_url(), self.upload_data(allocation_id=self.other_allocation.pk)
-        )
-        self.assertEqual(unrelated.status_code, 400)
-        self.assertIn("allocation", unrelated.json()["detail"].lower())
-
-        invalid_pdf = self.client.post(
+        invalid_pdf = self.recipient_client.post(
             self.upload_url(),
             self.upload_data(document=SimpleUploadedFile("image.pdf", b"not a PDF")),
         )
         self.assertEqual(invalid_pdf.status_code, 400)
 
-        missing_metadata = self.client.post(
+        missing_metadata = self.recipient_client.post(
             self.upload_url(),
             self.upload_data(survey_plan_number=""),
         )
         self.assertEqual(missing_metadata.status_code, 400)
 
-        missing_file = self.client.post(
+        missing_file = self.recipient_client.post(
             self.upload_url(),
             {key: value for key, value in self.upload_data().items() if key != "document"},
         )
         self.assertEqual(missing_file.status_code, 400)
 
     def test_duplicate_upload_for_same_allocation_is_idempotent(self):
-        first = self.client.post(self.upload_url(), self.upload_data())
+        first = self.recipient_client.post(self.upload_url(), self.upload_data())
         self.assertEqual(first.status_code, 201)
         plan = self.track_uploaded_file(first)
 
-        repeated = self.client.post(self.upload_url(), self.upload_data())
+        repeated = self.recipient_client.post(self.upload_url(), self.upload_data())
         self.assertEqual(repeated.status_code, 200)
         self.assertTrue(repeated.json()["duplicate"])
         self.assertEqual(repeated.json()["survey_plan"]["id"], str(plan.pk))
         self.assertEqual(SurveyPlan.objects.filter(allocation=self.allocation).count(), 1)
 
-    def test_verification_history_records_each_company_admin_change(self):
-        response = self.client.post(self.upload_url(), self.upload_data())
+    def test_upload_updates_boundary_immediately_and_company_verification_is_unavailable(self):
+        response = self.recipient_client.post(
+            self.upload_url(), self.upload_data(boundary_coordinates="[[3.4, 6.4], [3.5, 6.4], [3.5, 6.5]]")
+        )
         plan = self.track_uploaded_file(response)
+
+        self.parcel.refresh_from_db()
+        self.assertEqual(self.parcel.boundary_coordinates, [[3.4, 6.4], [3.5, 6.4], [3.5, 6.5]])
 
         result = self.client.post(
             f"/api/records/companies/{self.company.pk}/survey-plans/{plan.pk}/verify/",
             data=json.dumps({"status": "verified", "notes": "Reviewed against submitted document."}),
             content_type="application/json",
         )
-        self.assertEqual(result.status_code, 200)
-        plan.refresh_from_db()
-        self.assertEqual(plan.verification_status, SurveyPlan.VerificationStatus.VERIFIED)
-        self.assertEqual(plan.verified_by_id, self.admin.pk)
-        self.assertEqual(SurveyPlanVerificationEvent.objects.filter(survey_plan=plan).count(), 1)
+        self.assertEqual(result.status_code, 404)
 
-        reopened = self.client.post(
-            f"/api/records/companies/{self.company.pk}/survey-plans/{plan.pk}/verify/",
-            data=json.dumps({"status": "under_review", "notes": "Reopened for follow-up."}),
-            content_type="application/json",
-        )
-        self.assertEqual(reopened.status_code, 200)
-        self.assertEqual(SurveyPlanVerificationEvent.objects.filter(survey_plan=plan).count(), 2)
-
-    def test_company_and_recipient_downloads_are_scoped(self):
-        uploaded = self.client.post(self.upload_url(), self.upload_data())
+    def test_recipient_download_is_scoped(self):
+        uploaded = self.recipient_client.post(self.upload_url(), self.upload_data())
         plan = self.track_uploaded_file(uploaded)
-
-        other_admin_client = Client()
-        other_admin_client.force_login(self.other_admin)
-        denied_admin_download = other_admin_client.get(
-            f"/api/records/companies/{self.company.pk}/survey-plans/{plan.pk}/download/"
-        )
-        self.assertEqual(denied_admin_download.status_code, 403)
 
         correct_recipient_client = Client()
         correct_recipient_client.force_login(self.recipient)

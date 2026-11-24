@@ -219,7 +219,7 @@ def _layout_job_data(job):
         "metadata": job.metadata,
     }
 
-def _survey_plan_data(plan, *, include_internal=False):
+def _survey_plan_data(plan):
     data = {
         "id": str(plan.pk),
         "company_id": plan.company_id,
@@ -239,42 +239,14 @@ def _survey_plan_data(plan, *, include_internal=False):
         "area_unit": plan.area_unit,
         "coordinate_reference_system": plan.coordinate_reference_system,
         "datum": plan.datum,
+        "submitted_boundary_coordinates": plan.submitted_boundary_coordinates,
         "original_filename": plan.original_filename,
         "file_size": plan.file_size,
         "has_document": bool(plan.document),
-        "verification_status": plan.verification_status,
         "uploaded_by": plan.uploaded_by.get_full_name() or plan.uploaded_by.username,
         "uploaded_at": plan.uploaded_at.isoformat(),
-        "download_path": (
-            f"companies/{plan.company_id}/survey-plans/{plan.pk}/download"
-            if plan.document else None
-        ),
+        "download_path": None,
     }
-    if include_internal:
-        data.update({
-            "notes": plan.notes,
-            "verification_notes": plan.verification_notes,
-            "verified_by": (
-                plan.verified_by.get_full_name() or plan.verified_by.username
-                if plan.verified_by_id else None
-            ),
-            "verified_at": plan.verified_at.isoformat() if plan.verified_at else None,
-            "file_format": plan.file_format,
-            "checksum": plan.checksum,
-            "extracted_metadata": plan.extracted_metadata,
-            "created_at": plan.created_at.isoformat(),
-            "updated_at": plan.updated_at.isoformat(),
-            "verification_history": [{
-                "previous_status": event.previous_status,
-                "new_status": event.new_status,
-                "notes": event.notes,
-                "actor": (
-                    event.actor.get_full_name() or event.actor.username
-                    if event.actor_id else None
-                ),
-                "created_at": event.created_at.isoformat(),
-            } for event in plan.verification_history.select_related("actor").all()],
-        })
     return data
 
 def _candidate_data(candidate):

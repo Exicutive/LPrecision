@@ -29,17 +29,7 @@ services:
         value: "false"
       - key: TERRALEDGER_DATA_ROOT
         value: /var/data
-      - key: TERRALEDGER_EMAIL_BACKEND
-        sync: false
       - key: DEFAULT_FROM_EMAIL
         sync: false
-      - key: EMAIL_HOST
+      - key: RESEND_API_KEY
         sync: false
-      - key: EMAIL_PORT
-        value: "587"
-      - key: EMAIL_HOST_USER
-        sync: false
-      - key: EMAIL_HOST_PASSWORD
-        sync: false
-      - key: EMAIL_USE_TLS
-        value: "true"
