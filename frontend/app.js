@@ -261,13 +261,14 @@ async function submitEstate(form) {
   const submitButton = form.querySelector('[type="submit"]');
   const formData = new FormData(form);
   const image = formData.get("image");
+  const removeImage = formData.get("remove_image") === "true";
   errorMessage.hidden = true;
   submitButton.disabled = true;
   try {
     const estateId = state.editingEstate?.id;
     const result = await recordsRequest(
       estateId ? `companies/${state.activeCompanyId}/estates/${estateId}` : `companies/${state.activeCompanyId}/estates`,
-      image?.size
+      image?.size || removeImage
         ? { method: "POST", formData }
         : {
             method: estateId ? "PATCH" : "POST",
@@ -284,7 +285,7 @@ async function submitEstate(form) {
     }
     render();
   } catch (error) {
-    errorMessage.textContent = error.message;
+    errorMessage.textContent = error.message || "The estate could not be saved. Try a smaller image or continue without one.";
     errorMessage.hidden = false;
   } finally {
     if (submitButton.isConnected) submitButton.disabled = false;

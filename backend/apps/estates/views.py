@@ -59,6 +59,20 @@ from apps.accounts.models import VerifiedEmail
 User = get_user_model()
 
 
+MAX_ESTATE_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def _validate_estate_image(upload):
+    """Accept a reasonably sized image and return it for storage."""
+    if not upload:
+        return None
+    if not (upload.content_type or "").lower().startswith("image/"):
+        raise ValidationError("Choose an image file for the estate picture.")
+    if upload.size > MAX_ESTATE_IMAGE_BYTES:
+        raise ValidationError("Estate images must be 5 MB or smaller.")
+    return upload
+
+
 from apps.records.api_helpers import (
     _payload,
     _company_ids_for_user,
@@ -123,13 +137,17 @@ def company_estates(request, company_id):
         return JsonResponse({"detail": error}, status=400)
     if company.estates.filter(name__iexact=values["name"]).exists():
         return JsonResponse({"detail": "An estate with this name already exists for this company."}, status=409)
-    estate = Estate.objects.create(
-        company=company,
-        code=_estate_code(company, values["name"]),
-        created_by=request.user,
-        image=request.FILES.get("image"),
-        **values,
-    )
+    try:
+        image = _validate_estate_image(request.FILES.get("image"))
+        estate = Estate.objects.create(
+            company=company,
+            code=_estate_code(company, values["name"]),
+            created_by=request.user,
+            image=image,
+            **values,
+        )
+    except ValidationError as error:
+        return JsonResponse({"detail": "; ".join(error.messages)}, status=400)
     log_event(actor=request.user, action="estate.created", company=company, details={"estate_id": estate.pk})
     return JsonResponse({"estate": _estate_data(estate)}, status=201)
 
@@ -169,12 +187,26 @@ def company_estate_detail(request, company_id, estate_id):
     duplicate = membership.company.estates.filter(name__iexact=values["name"]).exclude(pk=estate.pk).exists()
     if duplicate:
         return JsonResponse({"detail": "An estate with this name already exists for this company."}, status=409)
+    remove_image = str(request.POST.get("remove_image", "")).lower() in {"1", "true", "yes", "on"}
+    try:
+        image = _validate_estate_image(request.FILES.get("image"))
+    except ValidationError as error:
+        return JsonResponse({"detail": "; ".join(error.messages)}, status=400)
+    if remove_image and image:
+        return JsonResponse({"detail": "Choose either a replacement image or remove the current image."}, status=400)
+
     for key, value in values.items():
         setattr(estate, key, value)
-    if request.FILES.get("image"):
-        estate.image = request.FILES["image"]
+    previous_image = (estate.image.storage, estate.image.name) if estate.image else None
+    if image:
+        estate.image = image
+    elif remove_image:
+        estate.image = ""
     estate.code = _estate_code(membership.company, values["name"], exclude_id=estate.pk)
     estate.save()
+    if previous_image and (image or remove_image):
+        storage, filename = previous_image
+        storage.delete(filename)
     log_event(actor=request.user, action="estate.updated", company=membership.company, details={"estate_id": estate.pk})
     return JsonResponse({"estate": _estate_data(estate)})
 

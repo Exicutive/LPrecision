@@ -3,7 +3,7 @@ import hashlib
 import re
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
-from unittest.mock import patch
+from unittest.mock import patch as mock_patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -147,7 +147,7 @@ class AdministrativeHierarchyTests(TestCase):
         self.company_two.refresh_from_db()
         self.assertEqual(self.company_two.setup_status, Company.SetupStatus.COMPLETE)
 
-    @patch("apps.platform_admin.views.send_mail", side_effect=OSError("Email unavailable"))
+    @mock_patch("apps.platform_admin.views.send_mail", side_effect=OSError("Email unavailable"))
     def test_company_admin_invitation_can_be_copied_when_email_delivery_fails(self, _send_mail):
         client = Client()
         client.force_login(self.platform_user)
@@ -271,6 +271,34 @@ class AdministrativeHierarchyTests(TestCase):
         estate.refresh_from_db()
         self.assertEqual(estate.status, Estate.Status.ARCHIVED)
         self.assertFalse(estate.is_active)
+
+    def test_company_admin_can_add_and_remove_an_optional_estate_image(self):
+        client = Client()
+        client.force_login(self.admin_one)
+        endpoint = f"/api/records/companies/{self.company_one.pk}/estates/"
+        uploaded = client.post(
+            endpoint,
+            {
+                **self.estate_payload("Image Estate"),
+                "image": SimpleUploadedFile("estate.jpg", b"image-content", content_type="image/jpeg"),
+            },
+        )
+        self.assertEqual(uploaded.status_code, 201)
+        estate = Estate.objects.get(pk=uploaded.json()["estate"]["id"])
+        filename = estate.image.name
+        storage = estate.image.storage
+        self.addCleanup(storage.delete, filename)
+        self.assertTrue(filename)
+        self.assertIn("/media/estate-images/", uploaded.json()["estate"]["image"])
+
+        removed = client.post(
+            f"/api/records/companies/{self.company_one.pk}/estates/{estate.pk}/",
+            {**self.estate_payload("Image Estate"), "remove_image": "true"},
+        )
+        self.assertEqual(removed.status_code, 200)
+        estate.refresh_from_db()
+        self.assertFalse(estate.image)
+        self.assertFalse(storage.exists(filename))
 
     def test_company_admin_cannot_access_update_or_archive_another_company_estate(self):
         other_estate = Estate.objects.create(

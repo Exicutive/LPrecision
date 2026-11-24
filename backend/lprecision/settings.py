@@ -209,25 +209,32 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR.parent / "frontend"]
-
-STORAGES = {
-    "staticfiles": {
-        # The frontend is a native ES-module application. Its module imports
-        # use stable URLs, so retain the original asset names rather than
-        # switching them to manifest hashes during collectstatic.
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
-    }
-}
-
 MEDIA_URL = '/media/'
 DATA_ROOT = Path(os.environ.get('TERRALEDGER_DATA_ROOT', BASE_DIR))
 MEDIA_ROOT = DATA_ROOT / 'media'
 PRIVATE_MEDIA_ROOT = Path(
     os.environ.get('TERRALEDGER_PRIVATE_MEDIA_ROOT', DATA_ROOT / 'private_media')
 )
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR.parent / "frontend"]
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {
+            "location": MEDIA_ROOT,
+            "base_url": MEDIA_URL,
+        },
+    },
+    "staticfiles": {
+        # The frontend is a native ES-module application. Its module imports
+        # use stable URLs, so retain the original asset names rather than
+        # switching them to manifest hashes during collectstatic.
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 
 # Email
