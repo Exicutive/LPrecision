@@ -82,8 +82,8 @@ class SurveyPlanWorkflowTests(TestCase):
             "state": "Lagos",
             "local_government_area": "Eti-Osa",
             "location_description": "Plot 100, Survey Estate",
-            "coordinate_reference_system": "",
-            "datum": "",
+            "coordinate_reference_system": "EPSG:4326",
+            "datum": "WGS 84",
             "notes": "Manual metadata entry",
         }
         values.update(overrides)
@@ -160,6 +160,7 @@ class SurveyPlanWorkflowTests(TestCase):
 
         self.parcel.refresh_from_db()
         self.assertEqual(self.parcel.boundary_coordinates, [[3.4, 6.4], [3.5, 6.4], [3.5, 6.5]])
+        self.assertEqual(self.parcel.boundary_coordinate_reference_system, "EPSG:4326")
 
         result = self.client.post(
             f"/api/records/companies/{self.company.pk}/survey-plans/{plan.pk}/verify/",
@@ -167,6 +168,39 @@ class SurveyPlanWorkflowTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(result.status_code, 404)
+
+    def test_property_holder_can_submit_wgs84_coordinates_without_a_pdf(self):
+        response = self.recipient_client.post(
+            f"/api/records/my-property/{self.allocation.pk}/boundary/",
+            data=json.dumps({
+                "coordinate_reference_system": "EPSG:4326",
+                "boundary_coordinates": [[3.4, 6.4], [3.4005, 6.4], [3.4005, 6.4005]],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.parcel.refresh_from_db()
+        self.assertEqual(self.parcel.boundary_coordinate_reference_system, "EPSG:4326")
+        self.assertEqual(len(self.parcel.boundary_coordinates), 3)
+
+    def test_boundary_coordinates_require_wgs84_and_a_simple_polygon(self):
+        missing_crs = self.recipient_client.post(
+            f"/api/records/my-property/{self.allocation.pk}/boundary/",
+            data=json.dumps({"boundary_coordinates": [[3.4, 6.4], [3.5, 6.4], [3.5, 6.5]]}),
+            content_type="application/json",
+        )
+        self.assertEqual(missing_crs.status_code, 400)
+        self.assertIn("WGS84", missing_crs.json()["detail"])
+
+        crossing = self.recipient_client.post(
+            f"/api/records/my-property/{self.allocation.pk}/boundary/",
+            data=json.dumps({
+                "coordinate_reference_system": "EPSG:4326",
+                "boundary_coordinates": [[3.4, 6.4], [3.5, 6.5], [3.4, 6.5], [3.5, 6.4]],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(crossing.status_code, 400)
 
     def test_recipient_download_is_scoped(self):
         uploaded = self.recipient_client.post(self.upload_url(), self.upload_data())

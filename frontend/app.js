@@ -4,7 +4,9 @@ import { authView } from "./js/views/auth.js?v=20261106";
 import { parcelSvg } from "./js/components.js?v=20261026";
 import {
   allocationModal,
+  boundaryGuidanceModal,
   parcelModal,
+  propertyBoundaryCoordinatesModal,
   propertySurveyPlanUploadModal,
 } from "./js/views/modals.js?v=20261106-settings";
 import { invitationView, userView } from "./js/views/property.js?v=20261106-settings";
@@ -14,6 +16,67 @@ const app = document.querySelector("#app");
 const apiBase = `${window.location.origin}/api`;
 const accountApi = `${apiBase}/accounts`;
 const recordsApi = `${apiBase}/records`;
+let boundaryGuidanceWatchId = null;
+
+function pointInsidePolygon([longitude, latitude], polygon) {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const [x, y] = polygon[index];
+    const [previousX, previousY] = polygon[previous];
+    if ((y > latitude) !== (previousY > latitude)
+      && longitude < ((previousX - x) * (latitude - y)) / (previousY - y) + x) inside = !inside;
+  }
+  return inside;
+}
+
+function boundaryDistance([longitude, latitude], polygon) {
+  const radians = Math.PI / 180;
+  const earthRadius = 6371008.8;
+  const project = ([x, y]) => [
+    (x - longitude) * radians * earthRadius * Math.cos(latitude * radians),
+    (y - latitude) * radians * earthRadius,
+  ];
+  let closest = null;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = project(polygon[index]);
+    const end = project(polygon[(index + 1) % polygon.length]);
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    const ratio = Math.max(0, Math.min(1, -(start[0] * dx + start[1] * dy) / (dx * dx + dy * dy)));
+    const point = [start[0] + ratio * dx, start[1] + ratio * dy];
+    const distance = Math.hypot(point[0], point[1]);
+    if (!closest || distance < closest.distance) closest = { distance, point };
+  }
+  const bearing = (Math.atan2(-closest.point[0], -closest.point[1]) * 180 / Math.PI + 360) % 360;
+  const direction = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(bearing / 45) % 8];
+  return { ...closest, direction };
+}
+
+function describeGuidance(position, polygon) {
+  const inside = pointInsidePolygon([position.longitude, position.latitude], polygon);
+  const nearest = boundaryDistance([position.longitude, position.latitude], polygon);
+  return {
+    inside,
+    direction: nearest.direction,
+    distance: nearest.distance,
+    distanceText: `${Math.max(1, Math.round(nearest.distance))} metres`,
+    accuracyText: `${Math.max(1, Math.round(position.accuracy))} metres`,
+  };
+}
+
+function speakGuidance(result) {
+  const guidance = state.boundaryGuidance;
+  if (!guidance?.audio || !window.speechSynthesis) return;
+  const message = result.inside
+    ? `You are inside the recorded boundary. The nearest boundary is about ${result.distanceText} away.`
+    : `You are approximately ${result.distanceText} outside the recorded ${result.direction} boundary.`;
+  const now = Date.now();
+  if (guidance.lastSpokenMessage === message && now - (guidance.lastSpokenAt || 0) < 15000) return;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(new SpeechSynthesisUtterance(message));
+  guidance.lastSpokenMessage = message;
+  guidance.lastSpokenAt = now;
+}
 
 function cookieValue(name) {
   const cookie = document.cookie
@@ -61,7 +124,7 @@ function clearSensitiveClientState() {
   Object.assign(state, {
     user: null, adminRole: null, activeCompanyId: null, propertyAllocations: [],
     propertyAllocation: null, propertyDetail: null, selectedAllocationId: null,
-    propertySurveyAllocationId: null,
+    propertySurveyAllocationId: null, propertyBoundaryAllocationId: null, boundaryGuidance: null,
     selectedParcel: null, selectedEstateId: null, editingEstate: null, modal: null,
     adminAuthorized: false, latestCompanyAdminInvitation: null,
   });
@@ -369,6 +432,92 @@ async function uploadPropertySurveyPlan(form) {
   } finally {
     if (submitButton.isConnected) submitButton.disabled = false;
   }
+}
+
+async function savePropertyBoundaryCoordinates(form) {
+  const errorMessage = form.querySelector(".form-error");
+  const submitButton = form.querySelector('[type="submit"]');
+  errorMessage.hidden = true;
+  submitButton.disabled = true;
+  try {
+    const allocationId = state.propertyBoundaryAllocationId;
+    const values = Object.fromEntries(new FormData(form));
+    const result = await recordsRequest(`my-property/${allocationId}/boundary`, {
+      method: "POST",
+      payload: values,
+    });
+    await loadRecords();
+    state.propertyDetail = state.propertyAllocations.find(
+      (allocation) => allocation.id === Number(allocationId),
+    ) || null;
+    state.modal = null;
+    state.propertyBoundaryAllocationId = null;
+    state.toast = `Recorded boundary saved with ${result.parcel.boundary_coordinates.length} vertices.`;
+    render();
+  } catch (error) {
+    errorMessage.textContent = error.message;
+    errorMessage.hidden = false;
+  } finally {
+    if (submitButton.isConnected) submitButton.disabled = false;
+  }
+}
+
+function beginBoundaryGuidance() {
+  const guidance = state.boundaryGuidance;
+  const allocation = state.propertyAllocations.find(
+    (item) => item.id === Number(guidance?.allocationId),
+  );
+  if (!allocation || allocation.parcel.boundary_coordinate_reference_system !== "EPSG:4326") {
+    state.boundaryGuidance = { ...guidance, error: "This property needs a WGS84 recorded boundary before guidance can start." };
+    render();
+    return;
+  }
+  if (!navigator.geolocation) {
+    state.boundaryGuidance = { ...guidance, error: "This browser does not support live location." };
+    render();
+    return;
+  }
+  state.boundaryGuidance = { ...guidance, active: true, error: "Requesting your location…" };
+  render();
+  boundaryGuidanceWatchId = navigator.geolocation.watchPosition(
+    (position) => {
+      const currentPosition = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+      };
+      if (currentPosition.accuracy > 50) {
+        state.boundaryGuidance = {
+          ...state.boundaryGuidance,
+          position: currentPosition,
+          result: null,
+          error: `Location accuracy is about ${Math.round(currentPosition.accuracy)} metres. Move to an open area and wait for a more accurate reading.`,
+        };
+      } else {
+        const result = describeGuidance(currentPosition, allocation.parcel.boundary_coordinates);
+        state.boundaryGuidance = { ...state.boundaryGuidance, position: currentPosition, result, error: "" };
+        speakGuidance(result);
+      }
+      render();
+    },
+    (error) => {
+      const message = error.code === error.PERMISSION_DENIED
+        ? "Location permission was not granted. You can enable it in your browser settings and try again."
+        : "Your location could not be read. Check GPS, network, and browser permissions, then try again.";
+      state.boundaryGuidance = { ...state.boundaryGuidance, active: false, error: message };
+      render();
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
+  );
+}
+
+function stopBoundaryGuidance() {
+  if (boundaryGuidanceWatchId !== null) navigator.geolocation?.clearWatch(boundaryGuidanceWatchId);
+  boundaryGuidanceWatchId = null;
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  state.boundaryGuidance = null;
+  state.modal = null;
+  render();
 }
 
 async function saveCompanyInformation(form) {
@@ -701,6 +850,8 @@ function render() {
   if (state.modal === "allocation") markup += allocationModal();
   if (state.modal === "parcel") markup += parcelModal();
   if (state.modal === "property-survey-upload") markup += propertySurveyPlanUploadModal();
+  if (state.modal === "property-boundary-coordinates") markup += propertyBoundaryCoordinatesModal();
+  if (state.modal === "boundary-guidance") markup += boundaryGuidanceModal();
   if (state.toast) markup += `<div class="toast">${state.toast}</div>`;
   app.innerHTML = markup;
   bind();
@@ -737,6 +888,11 @@ function bind() {
     event.preventDefault();
     uploadPropertySurveyPlan(propertySurveyPlanUploadForm);
   });
+  const propertyBoundaryCoordinatesForm = app.querySelector("#property-boundary-coordinates-form");
+  if (propertyBoundaryCoordinatesForm) propertyBoundaryCoordinatesForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    savePropertyBoundaryCoordinates(propertyBoundaryCoordinatesForm);
+  });
   const boundaryCoordinates = app.querySelector("#submitted-boundary-coordinates");
   if (boundaryCoordinates) boundaryCoordinates.addEventListener("input", () => {
     const preview = app.querySelector("#submitted-boundary-preview");
@@ -744,6 +900,16 @@ function bind() {
     try {
       const coordinates = JSON.parse(boundaryCoordinates.value || "[]");
       preview.innerHTML = parcelSvg(false, coordinates);
+    } catch {
+      preview.innerHTML = "<p class=\"muted\" style=\"padding:20px\">Enter valid JSON coordinate pairs to preview the boundary.</p>";
+    }
+  });
+  const directBoundaryCoordinates = app.querySelector("#direct-boundary-coordinates");
+  if (directBoundaryCoordinates) directBoundaryCoordinates.addEventListener("input", () => {
+    const preview = app.querySelector("#direct-boundary-preview");
+    if (!preview) return;
+    try {
+      preview.innerHTML = parcelSvg(false, JSON.parse(directBoundaryCoordinates.value || "[]"));
     } catch {
       preview.innerHTML = "<p class=\"muted\" style=\"padding:20px\">Enter valid JSON coordinate pairs to preview the boundary.</p>";
     }
@@ -812,6 +978,22 @@ function handle(action) {
   } else if (action.startsWith("upload-property-survey:")) {
     state.propertySurveyAllocationId = Number(action.split(":")[1]);
     state.modal = "property-survey-upload";
+  } else if (action.startsWith("edit-boundary-coordinates:")) {
+    state.propertyBoundaryAllocationId = Number(action.split(":")[1]);
+    state.modal = "property-boundary-coordinates";
+  } else if (action.startsWith("start-boundary-guidance:")) {
+    state.boundaryGuidance = {
+      allocationId: Number(action.split(":")[1]), active: false, audio: false, error: "", position: null, result: null,
+    };
+    state.modal = "boundary-guidance";
+  } else if (action === "start-boundary-guidance") {
+    beginBoundaryGuidance();
+    return;
+  } else if (action === "stop-boundary-guidance") {
+    stopBoundaryGuidance();
+    return;
+  } else if (action === "toggle-boundary-audio") {
+    state.boundaryGuidance = { ...state.boundaryGuidance, audio: !state.boundaryGuidance?.audio };
   } else if (action.startsWith("resend-allocation:")) {
     resendAllocationInvitation(action.split(":")[1]);
     return;

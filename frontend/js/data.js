@@ -58,6 +58,8 @@ export const state = {
   estateStatusFilter: "all",
   estateDetailTab: "overview",
   propertySurveyAllocationId: null,
+  propertyBoundaryAllocationId: null,
+  boundaryGuidance: null,
   propertyAllocation: null,
   recordsLoading: false,
   adminAuthorized: false,

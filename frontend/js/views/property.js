@@ -61,6 +61,14 @@ function propertyDetails(allocation) {
   return `<section class="panel"><div class="panel-head"><div><p class="eyebrow">Allocation record</p><h2>Property details</h2></div><button class="text-action" data-action="user-page:properties">← My Properties</button></div><div class="detail-list"><div><span>Company</span><strong>${escapeHtml(parcel.estate.company_name)}</strong></div><div><span>Estate</span><strong>${escapeHtml(parcel.estate.name)}</strong></div><div><span>Location</span><strong>${escapeHtml([parcel.estate.local_government_area, parcel.estate.state].filter(Boolean).join(", ") || "Not recorded")}</strong></div><div><span>Plot</span><strong>${escapeHtml(parcel.plot_number)}${parcel.block ? ` · Block ${escapeHtml(parcel.block)}` : ""}</strong></div><div><span>Plot size</span><strong>${parcel.area_sqm ? `${escapeHtml(parcel.area_sqm)} m²` : "Not recorded"}</strong></div><div><span>Property type</span><strong>${escapeHtml(parcel.property_type || "Not recorded")}</strong></div><div><span>Plot features</span><strong>${escapeHtml(features)}</strong></div><div><span>Allocation date</span><strong>${new Date(allocation.allocated_at).toLocaleDateString()}</strong></div><div><span>Allocation status</span>${status(allocation.status)}</div><div><span>Allocation reference</span><strong>${escapeHtml(allocation.reference)}</strong></div></div><p class="muted">An allocation record does not independently establish legal title to property.</p></section><section class="panel"><div class="panel-head"><div><p class="eyebrow">Property document</p><h2>Survey Plan</h2></div>${allocation.status === "active" ? button("Upload survey plan", `upload-property-survey:${allocation.id}`, "primary") : ""}</div><div class="survey-plan-list">${surveySection}</div><p class="muted">Your PDF is stored with this property record. Coordinates are reflected in the boundary view immediately.</p></section>`;
 }
 
+function boundaryGuidancePanel(allocation) {
+  const parcel = allocation.parcel;
+  const hasGuidanceBoundary = parcel.boundary_coordinates?.length >= 3
+    && parcel.boundary_coordinate_reference_system === "EPSG:4326";
+  if (allocation.status !== "active") return "";
+  return `<section class="panel"><div class="panel-head"><div><p class="eyebrow">Recorded boundary</p><h2>Boundary guidance</h2></div></div><p class="muted">Enter WGS84 longitude/latitude coordinates to enable optional live phone guidance. Your location is never stored by default.</p><div class="form-actions">${button("Enter coordinates", `edit-boundary-coordinates:${allocation.id}`, "secondary")}${hasGuidanceBoundary ? button("Start boundary guidance", `start-boundary-guidance:${allocation.id}`, "primary") : ""}</div></section>`;
+}
+
 function propertyList(allocations) {
   if (!allocations.length) return empty("No properties linked yet", "Properties allocated to this email will appear here after you accept their secure invitation.");
   const cards = allocations.map((allocation) => {
@@ -77,7 +85,7 @@ function propertyList(allocations) {
 
 function content(allocation) {
   if (state.userPage === "documents") return empty("No documents yet", "Survey plans you upload for your properties will appear here.");
-  if (state.userPage === "allocation") return propertyDetails(allocation);
+  if (state.userPage === "allocation") return `${propertyDetails(allocation)}${allocation ? boundaryGuidancePanel(allocation) : ""}`;
   if (state.userPage === "settings") return `<section class="panel"><div class="panel-head"><div><p class="eyebrow">Account</p><h2>Your access profile</h2></div></div><div class="detail-list"><div><span>Name</span><strong>${state.user.full_name}</strong></div><div><span>Email</span><strong>${state.user.email}</strong></div><div><span>Access</span><strong>Property-holder record view</strong></div></div></section>`;
   return propertyList(state.propertyAllocations || []);
 }

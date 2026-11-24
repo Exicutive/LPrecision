@@ -179,6 +179,7 @@ def _parcel_data(parcel):
         "status": parcel.status,
         "survey_reference": parcel.survey_reference,
         "boundary_coordinates": parcel.boundary_coordinates,
+        "boundary_coordinate_reference_system": parcel.boundary_coordinate_reference_system,
         "perimeter_m": str(parcel.perimeter_m) if parcel.perimeter_m is not None else None,
         "source_master_plan_id": str(parcel.source_master_plan_id) if parcel.source_master_plan_id else None,
         "extraction_status": parcel.extraction_status,

@@ -30,6 +30,7 @@ class Parcel(models.Model):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.AVAILABLE)
     survey_reference = models.CharField(max_length=100, blank=True)
     boundary_coordinates = models.JSONField(default=list, blank=True)
+    boundary_coordinate_reference_system = models.CharField(max_length=50, blank=True)
     original_boundary_coordinates = models.JSONField(default=list, blank=True)
     perimeter_m = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     source_master_plan = models.ForeignKey(

@@ -43,7 +43,12 @@ from apps.platform_admin.permissions import (
 from apps.master_layouts.services import (
     LayoutUploadError, MasterLayoutProcessingService, MasterLayoutUploadService, ParcelGenerationService,
 )
-from apps.survey_plans.services import SurveyPlanUploadError, create_survey_plan
+from apps.survey_plans.services import (
+    SurveyPlanUploadError,
+    WGS84_COORDINATE_REFERENCE_SYSTEM,
+    create_survey_plan,
+    validate_boundary_coordinates,
+)
 from apps.accounts.models import VerifiedEmail
 
 
@@ -51,6 +56,7 @@ User = get_user_model()
 
 
 from apps.records.api_helpers import (
+    _payload,
     _company_ids_for_user,
     _company_data,
     _estate_data,
@@ -91,10 +97,51 @@ def recipient_survey_plan_detail(request, allocation_id, survey_plan_id):
     return JsonResponse({"survey_plan": data})
 
 
+# Save a WGS84 boumdary supplied directly by the active property holder
+@require_POST
+@login_required
+def recipient_boundary_update(request, allocation_id):
+    allocation = Allocation.objects.select_related("parcel__estate__company").filter(
+        pk=allocation_id,
+        allottee=request.user,
+        status=Allocation.Status.ACTIVE,
+    ).first()
+    if not allocation:
+        return JsonResponse({"detail": "You can only update the boundary for an active property linked to your account."}, status=404)
+    payload = _payload(request)
+    if payload is None:
+        return JsonResponse({"detail": "Send a valid JSON request."}, status=400)
+    try:
+        coordinates = validate_boundary_coordinates(
+            payload.get("boundary_coordinates"),
+            payload.get("coordinate_reference_system"),
+        )
+    except SurveyPlanUploadError as error:
+        return JsonResponse({"detail": str(error)}, status=400)
+    allocation.parcel.boundary_coordinates = coordinates
+    allocation.parcel.boundary_coordinate_reference_system = WGS84_COORDINATE_REFERENCE_SYSTEM
+    allocation.parcel.perimeter_m = None
+    allocation.parcel.save(update_fields=(
+        "boundary_coordinates", "boundary_coordinate_reference_system", "perimeter_m", "updated_at",
+    ))
+    log_event(
+        actor=request.user,
+        action="parcel.boundary_submitted_by_recipient",
+        company=allocation.parcel.estate.company,
+        details={
+            "parcel_id": allocation.parcel_id,
+            "allocation_id": allocation.pk,
+            "coordinate_reference_system": WGS84_COORDINATE_REFERENCE_SYSTEM,
+            "vertex_count": len(coordinates),
+        },
+    )
+    return JsonResponse({"parcel": _parcel_data(allocation.parcel)})
+
+
+# Allow only the linked property holder to save a plan for their property
 @require_POST
 @login_required
 def recipient_survey_plan_upload(request, allocation_id):
-    """Allow only the linked property holder to save a plan for their property."""
     allocation = Allocation.objects.select_related("parcel__estate__company").filter(
         pk=allocation_id,
         allottee=request.user,

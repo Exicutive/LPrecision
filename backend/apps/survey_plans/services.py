@@ -15,6 +15,7 @@ from apps.survey_plans.models import SurveyPlan, SurveyPlanVerificationEvent
 
 MAX_SURVEY_PLAN_BYTES = 25 * 1024 * 1024
 ALLOWED_SURVEY_PLAN_EXTENSION = ".pdf"
+WGS84_COORDINATE_REFERENCE_SYSTEM = "EPSG:4326"
 
 
 class SurveyPlanUploadError(ValueError):
@@ -103,9 +104,31 @@ def validate_survey_plan_metadata(payload):
         values[key] = value
     return values
 
+# Return the only CRS currently safe for browser GPS guidance
+def normalise_coordinate_reference_system(value):
+    coordinate_reference_system = str(value or "").strip().upper().replace(" ", "")
+    aliases = {"EPSG:4326", "WGS84", "WGS-84"}
+    if coordinate_reference_system not in aliases:
+        raise SurveyPlanUploadError(
+            "Live boundary guidance currently requires WGS84 longitude/latitude coordinates (EPSG:4326). "
+            "Convert Minna/NTM or UTM coordinates with a licensed surveyor before submitting them."
+        )
+    return WGS84_COORDINATE_REFERENCE_SYSTEM
 
-def validate_boundary_coordinates(value):
-    """Validate optional [longitude/easting, latitude/northing] vertex pairs."""
+
+def _orientation(a, b, c):
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+
+def _segments_intersect(a, b, c, d):
+    first = _orientation(a, b, c)
+    second = _orientation(a, b, d)
+    third = _orientation(c, d, a)
+    fourth = _orientation(c, d, b)
+    return first * second < 0 and third * fourth < 0
+
+# Validate a simple WGS84 polygon supplied as longitude, latitude pairs
+def validate_boundary_coordinates(value, coordinate_reference_system):
     if value in (None, ""):
         return []
     if isinstance(value, str):
@@ -117,6 +140,7 @@ def validate_boundary_coordinates(value):
             ) from error
     if not isinstance(value, list) or not (3 <= len(value) <= 1000):
         raise SurveyPlanUploadError("Provide between 3 and 1,000 boundary coordinate pairs.")
+    normalise_coordinate_reference_system(coordinate_reference_system)
     coordinates = []
     for point in value:
         if not isinstance(point, (list, tuple)) or len(point) != 2:
@@ -127,14 +151,39 @@ def validate_boundary_coordinates(value):
             raise SurveyPlanUploadError("Boundary coordinates must be numbers.") from error
         if not math.isfinite(x) or not math.isfinite(y):
             raise SurveyPlanUploadError("Boundary coordinates must be finite numbers.")
+        if not (-180 <= x <= 180 and -90 <= y <= 90):
+            raise SurveyPlanUploadError("WGS84 coordinates must use longitude from -180 to 180 and latitude from -90 to 90.")
         coordinates.append([x, y])
+    if coordinates[0] == coordinates[-1]:
+        coordinates.pop()
+    if len({tuple(point) for point in coordinates}) < 3:
+        raise SurveyPlanUploadError("A boundary needs at least three different coordinate pairs.")
+    signed_area = sum(
+        coordinates[index][0] * coordinates[(index + 1) % len(coordinates)][1]
+        - coordinates[(index + 1) % len(coordinates)][0] * coordinates[index][1]
+        for index in range(len(coordinates))
+    )
+    if abs(signed_area) < 1e-12:
+        raise SurveyPlanUploadError("Boundary coordinates must form an area, not a straight line.")
+    for index, start in enumerate(coordinates):
+        end = coordinates[(index + 1) % len(coordinates)]
+        for other_index in range(index + 1, len(coordinates)):
+            if abs(index - other_index) in (0, 1) or {index, other_index} == {0, len(coordinates) - 1}:
+                continue
+            other_start = coordinates[other_index]
+            other_end = coordinates[(other_index + 1) % len(coordinates)]
+            if _segments_intersect(start, end, other_start, other_end):
+                raise SurveyPlanUploadError("Boundary sides must not cross each other.")
     return coordinates
 
 
 def create_survey_plan(*, company, allocation_id, uploaded_file, metadata, user, recipient=None):
     filename, checksum = validate_survey_plan_upload(uploaded_file)
     values = validate_survey_plan_metadata(metadata)
-    submitted_boundary_coordinates = validate_boundary_coordinates(metadata.get("boundary_coordinates"))
+    submitted_boundary_coordinates = validate_boundary_coordinates(
+        metadata.get("boundary_coordinates"),
+        values["coordinate_reference_system"],
+    ) if metadata.get("boundary_coordinates") not in (None, "") else []
     plan = None
     try:
         with transaction.atomic():
@@ -193,9 +242,10 @@ def create_survey_plan(*, company, allocation_id, uploaded_file, metadata, user,
             plan.save()
             if submitted_boundary_coordinates:
                 allocation.parcel.boundary_coordinates = submitted_boundary_coordinates
+                allocation.parcel.boundary_coordinate_reference_system = WGS84_COORDINATE_REFERENCE_SYSTEM
                 allocation.parcel.perimeter_m = None
                 allocation.parcel.save(update_fields=(
-                    "boundary_coordinates", "perimeter_m", "updated_at",
+                    "boundary_coordinates", "boundary_coordinate_reference_system", "perimeter_m", "updated_at",
                 ))
             return plan, True
     except IntegrityError as error:

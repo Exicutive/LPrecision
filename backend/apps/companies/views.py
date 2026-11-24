@@ -78,14 +78,9 @@ from apps.records.api_helpers import (
     _invitation_request_rate_limited,
 )
 
-
+# Validate an invitation before the browser offers account creation
 @require_GET
 def company_admin_invitation_status(request):
-    """Validate an invitation before the browser offers account creation."""
-    # Older frontend builds accidentally appended a slash to the query value.
-    # The generated tokens are URL-safe and never contain slashes, so accepting
-    # surrounding whitespace/a trailing slash keeps a cached client from making
-    # an otherwise valid invitation appear expired.
     token = str(request.GET.get("token", "")).strip().rstrip("/")
     invitation = CompanyAdminInvitation.objects.select_related("company").filter(
         token_hash=hashlib.sha256(token.encode()).hexdigest(),

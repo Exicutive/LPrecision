@@ -4,9 +4,8 @@ import uuid
 
 from apps.companies.models import Company
 
-
+# A development whose approved parcels are managed in the platform
 class Estate(models.Model):
-    """A development whose approved parcels are managed in the platform."""
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
