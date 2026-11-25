@@ -103,8 +103,8 @@ def estates(request):
         queryset = Estate.objects.filter(company_id__in=_company_ids_for_user(request.user))
     else:
         estate_ids = Estate.objects.filter(
-            parcels__allocation__allottee=request.user,
-            parcels__allocation__status=Allocation.Status.ACTIVE,
+            parcels__allocations__allottee=request.user,
+            parcels__allocations__status=Allocation.Status.ACTIVE,
         ).values_list("id", flat=True)
         queryset = Estate.objects.filter(id__in=estate_ids).distinct()
     return JsonResponse({"estates": [_estate_data(estate) for estate in queryset]})
@@ -165,7 +165,7 @@ def company_estates_overview(request, company_id):
         "inactive_estates": estates.filter(status=Estate.Status.INACTIVE).count(),
         "archived_estates": estates.filter(status=Estate.Status.ARCHIVED).count(),
         "total_parcels": parcels.count(),
-        "allocated_parcels": parcels.filter(allocation__isnull=False).count(),
+        "allocated_parcels": parcels.filter(status=Parcel.Status.ALLOCATED).count(),
     })
 
 @require_http_methods(["GET", "PATCH", "POST"])

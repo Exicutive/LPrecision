@@ -482,10 +482,10 @@ class AllocationInvitationWorkflowTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
     def test_failed_email_is_recorded_and_resend_rotates_single_use_token(self):
-        with patch(
+        with mock_patch(
             "apps.allocations.services.secrets.token_urlsafe",
             return_value="old-token",
-        ), patch(
+        ), mock_patch(
             "apps.allocations.services.EmailMultiAlternatives.send",
             side_effect=OSError("SMTP is unavailable"),
         ), self.captureOnCommitCallbacks(execute=True):
@@ -501,7 +501,7 @@ class AllocationInvitationWorkflowTests(TestCase):
         self.assertIn("SMTP is unavailable", failed_invitation.failure_reason)
         self.assertEqual(allocation.parcel.status, Parcel.Status.ALLOCATED)
 
-        with patch(
+        with mock_patch(
             "apps.allocations.services.secrets.token_urlsafe",
             return_value="new-token",
         ), self.captureOnCommitCallbacks(execute=True):
@@ -612,11 +612,22 @@ class AllocationInvitationWorkflowTests(TestCase):
         self.assertEqual(revoked.status_code, 200)
         self.assertTrue(Allocation.objects.filter(pk=allocation.pk).exists())
         self.assertEqual(Allocation.objects.get(pk=allocation.pk).status, Allocation.Status.REVOKED)
-        self.assertEqual(Parcel.objects.get(pk=second_parcel.pk).status, Parcel.Status.ALLOCATED)
+        self.assertEqual(Parcel.objects.get(pk=second_parcel.pk).status, Parcel.Status.AVAILABLE)
         rejected = Client().get(
             "/api/records/allocation-invitations/status/", {"token": revoked_token}
         )
         self.assertEqual(rejected.status_code, 400)
+
+        reassigned = self.issue_allocation(
+            email="new-recipient@example.com", parcel=second_parcel, name="New Recipient"
+        )
+        self.assertEqual(reassigned.status_code, 201)
+        self.assertEqual(Allocation.objects.filter(parcel=second_parcel).count(), 2)
+        self.assertEqual(
+            Allocation.objects.get(parcel=second_parcel, recipient_email="new-recipient@example.com").status,
+            Allocation.Status.PENDING,
+        )
+        self.assertEqual(Parcel.objects.get(pk=second_parcel.pk).status, Parcel.Status.ALLOCATED)
 
     def test_recipient_property_scope_multiple_allocations_and_company_scope(self):
         self.issue_allocation()

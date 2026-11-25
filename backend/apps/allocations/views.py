@@ -161,7 +161,10 @@ def company_allocations(request, company_id):
             ).filter(pk=parcel_id, estate__company=membership.company).first()
             if not parcel:
                 return JsonResponse({"detail": "Company parcel not found."}, status=404)
-            existing = Allocation.objects.select_for_update().filter(parcel=parcel).first()
+            existing = Allocation.objects.select_for_update().filter(
+                parcel=parcel,
+                status__in=(Allocation.Status.PENDING, Allocation.Status.ACTIVE),
+            ).first()
             if existing:
                 if existing.recipient_email.casefold() == email.casefold():
                     existing = Allocation.objects.select_related(
@@ -223,7 +226,11 @@ def company_allocations(request, company_id):
     except IntegrityError:
         existing = Allocation.objects.select_related(
             "parcel__estate__company", "allottee"
-        ).filter(parcel_id=parcel_id, recipient_email__iexact=email).first()
+        ).filter(
+            parcel_id=parcel_id,
+            recipient_email__iexact=email,
+            status__in=(Allocation.Status.PENDING, Allocation.Status.ACTIVE),
+        ).first()
         if existing:
             return JsonResponse({"allocation": _allocation_data(existing)}, status=200)
         return JsonResponse(
@@ -440,7 +447,7 @@ def revoke_allocation(request, company_id, allocation_id):
     if not membership:
         return JsonResponse({"detail": "Company administrator access is required for this company."}, status=403)
     with transaction.atomic():
-        allocation = Allocation.objects.select_for_update().filter(
+        allocation = Allocation.objects.select_for_update().select_related("parcel").filter(
             pk=allocation_id, parcel__estate__company=membership.company
         ).first()
         if not allocation:
@@ -454,13 +461,18 @@ def revoke_allocation(request, company_id, allocation_id):
                 AllocationInvitation.Status.SENT,
                 AllocationInvitation.Status.FAILED,
             )).update(status=AllocationInvitation.Status.REVOKED, revoked_at=now)
+            # The allocation remains in history, but the parcel is immediately
+            # available for a new allocation to this or another recipient.
+            parcel = Parcel.objects.select_for_update().get(pk=allocation.parcel_id)
+            parcel.status = Parcel.Status.AVAILABLE
+            parcel.save(update_fields=("status", "updated_at"))
             log_event(
                 actor=request.user,
                 action="allocation.revoked",
                 company=membership.company,
                 details={"allocation_id": allocation.pk, "parcel_id": allocation.parcel_id},
             )
-    return JsonResponse({"detail": "Allocation revoked. Its historical record was retained."})
+    return JsonResponse({"detail": "Allocation revoked. Its historical record was retained and the parcel is available to allocate again."})
 
 @require_POST
 @login_required

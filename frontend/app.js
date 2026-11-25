@@ -665,7 +665,7 @@ async function resendAllocationInvitation(allocationId) {
 }
 
 async function revokeAllocation(allocationId) {
-  if (!window.confirm("Revoke this allocation? Its historical record will be retained and the parcel will remain allocated.")) return;
+  if (!window.confirm("Revoke this allocation? Its historical record will be retained and the parcel will become available for a new allocation.")) return;
   try {
     await recordsRequest(
       `companies/${state.activeCompanyId}/allocations/${allocationId}/revoke`,
@@ -673,7 +673,7 @@ async function revokeAllocation(allocationId) {
     );
     await loadAdminRecords();
     state.adminPage = "allocations";
-    state.toast = "Allocation revoked. Its historical record was retained.";
+    state.toast = "Allocation revoked. The parcel is now available to allocate again.";
     render();
   } catch (error) {
     state.toast = error.message;

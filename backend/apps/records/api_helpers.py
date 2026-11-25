@@ -105,7 +105,7 @@ def _company_data(company):
 def _estate_data(estate):
     parcels = estate.parcels
     parcel_count = parcels.count()
-    allocated_count = parcels.filter(allocation__isnull=False).count()
+    allocated_count = parcels.filter(status=Parcel.Status.ALLOCATED).count()
     return {
         "id": estate.pk,
         "public_id": str(estate.public_id),

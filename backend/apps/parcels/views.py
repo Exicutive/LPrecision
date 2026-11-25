@@ -95,8 +95,8 @@ def parcels(request):
         queryset = queryset.filter(estate__company_id__in=_company_ids_for_user(request.user))
     else:
         queryset = queryset.filter(
-            allocation__allottee=request.user,
-            allocation__status=Allocation.Status.ACTIVE,
+            allocations__allottee=request.user,
+            allocations__status=Allocation.Status.ACTIVE,
         )
     return JsonResponse({"parcels": [_parcel_data(parcel) for parcel in queryset]})
 

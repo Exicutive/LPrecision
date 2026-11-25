@@ -168,7 +168,7 @@ def company_dashboard(request, company_id):
         "estates": company.estates.count(),
         "active_estates": company.estates.filter(status=Estate.Status.ACTIVE).count(),
         "parcels": parcels.count(),
-        "allocated_parcels": parcels.filter(allocation__isnull=False).count(),
+        "allocated_parcels": parcels.filter(status=Parcel.Status.ALLOCATED).count(),
         "available_parcels": parcels.filter(status=Parcel.Status.AVAILABLE).count(),
         "allocations": Allocation.objects.filter(parcel__estate__company=company).count(),
         "survey_plans": company.survey_plans.count(),

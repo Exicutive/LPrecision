@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 import uuid
 
 from apps.companies.models import Company
@@ -7,7 +8,7 @@ from apps.parcels.models import Parcel
 
 
 class Allocation(models.Model):
-    """The current authenticated-user access relationship for a parcel."""
+    """A historical or current authenticated-user access relationship for a parcel."""
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -15,7 +16,9 @@ class Allocation(models.Model):
         REVOKED = "revoked", "Revoked"
 
     reference = models.CharField(max_length=50, unique=True)
-    parcel = models.OneToOneField(Parcel, on_delete=models.PROTECT, related_name="allocation")
+    # Keep every allocation as history. A parcel may be allocated again only after
+    # its prior allocation is revoked.
+    parcel = models.ForeignKey(Parcel, on_delete=models.PROTECT, related_name="allocations")
     recipient_name = models.CharField(max_length=200)
     recipient_email = models.EmailField()
     allottee = models.ForeignKey(
@@ -35,6 +38,13 @@ class Allocation(models.Model):
         indexes = [
             models.Index(fields=("allottee", "status"), name="allocation_allottee_idx"),
             models.Index(fields=("status", "-allocated_at"), name="allocation_status_date_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("parcel",),
+                condition=~Q(status="revoked"),
+                name="one_open_allocation_per_parcel",
+            ),
         ]
 
     def __str__(self):
