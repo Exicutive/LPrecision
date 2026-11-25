@@ -1181,7 +1181,16 @@ if (currentEndpoint === "property") {
         loadCompanyAdminInvitation().then(render);
       } else if (state.allocationInvitationToken) {
         loadAllocationInvitation().then(() => {
-          state.view = "invite";
+          // A property invite is most often for a recipient who does not have an
+          // account yet. Take that recipient straight to the account form instead
+          // of leaving the sign-in mode selected by default. Existing recipients
+          // can still choose the Sign in tab on the form.
+          if (!state.invitationError) {
+            state.authMode = "signup";
+            state.view = "auth";
+          } else {
+            state.view = "invite";
+          }
           render();
         });
       } else if (error.status !== 401) {
