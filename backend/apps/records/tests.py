@@ -253,6 +253,32 @@ class AdministrativeHierarchyTests(TestCase):
         self.assertNotIn(self.estate_two.pk, listed_ids)
         self.assertEqual(client.get(f"/api/records/companies/{self.company_two.pk}/estates/").status_code, 403)
 
+    def test_company_admin_can_create_a_manual_parcel_for_later_allocation(self):
+        client = Client()
+        client.force_login(self.admin_one)
+        response = self.post(
+            client,
+            f"/api/records/companies/{self.company_one.pk}/parcels/",
+            {
+                "estate_id": self.estate_one.pk,
+                "name": "Sunrise Corner Plot",
+                "plot_number": "A-20",
+                "block": "A",
+                "property_type": "Corner Piece",
+                "area_sqm": "450",
+                "plot_details": "Facing the access road.",
+                "special_requests": "Residential development only.",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        parcel = Parcel.objects.get(pk=response.json()["parcel"]["id"])
+        self.assertEqual(parcel.status, Parcel.Status.AVAILABLE)
+        self.assertEqual(parcel.name, "Sunrise Corner Plot")
+        self.assertEqual(parcel.property_type, "Corner Piece")
+        self.assertEqual(parcel.plot_details, "Facing the access road.")
+        self.assertEqual(parcel.special_requests, "Residential development only.")
+        self.assertEqual(parcel.boundary_coordinates, [])
+
     def test_company_admin_can_view_update_and_archive_own_estate(self):
         estate = Estate.objects.create(
             company=self.company_one, name="Meridian Gardens", code="first-meridian", state="Lagos",

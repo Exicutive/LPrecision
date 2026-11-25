@@ -104,7 +104,7 @@ function estateDetail() {
   const estateAllocations = data.allocations.filter((allocation) => allocation.parcel.estate.id === estate.id);
   const sections = {
     overview: `<section class="detail-list"><div><span>Location</span><strong>${estate.address}</strong></div><div><span>State / LGA</span><strong>${estate.state} · ${estate.local_government_area}</strong></div><div><span>Status</span>${status(estate.status)}</div><div><span>Created</span><strong>${new Date(estate.created_at).toLocaleDateString()}</strong></div><div><span>Last updated</span><strong>${new Date(estate.updated_at).toLocaleDateString()}</strong></div><div><span>Created by</span><strong>${estate.created_by || "Not recorded"}</strong></div><div class="detail-wide"><span>Description</span><strong>${estate.description || "No description recorded."}</strong></div></section>`,
-    parcels: table(["Plot", "Block", "Status"], estateParcels.map((parcel) => `<tr><td>${escapeHtml(parcel.plot_number)}</td><td>${escapeHtml(parcel.block || "—")}</td><td>${status(parcel.status)}</td></tr>`), "No approved parcels have been published for this estate."),
+    parcels: table(["Parcel", "Plot", "Type", "Status"], estateParcels.map((parcel) => `<tr><td><strong>${escapeHtml(parcel.name || parcel.plot_number)}</strong>${parcel.plot_details ? `<span class="subcell">${escapeHtml(parcel.plot_details)}</span>` : ""}</td><td>${escapeHtml(parcel.plot_number)}<span class="subcell">${escapeHtml(parcel.block || "No block")}</span></td><td>${escapeHtml(parcel.property_type || "—")}</td><td>${status(parcel.status)}</td></tr>`), "No parcels have been created for this estate."),
     allocations: table(["Reference", "Plot", "Recipient", "Status"], estateAllocations.map((item) => `<tr><td>${escapeHtml(item.reference)}</td><td>${escapeHtml(item.parcel.plot_number)}${item.parcel.block ? `<span class="subcell">Block ${escapeHtml(item.parcel.block)}</span>` : ""}</td><td>${escapeHtml(item.allottee?.full_name || item.recipient_name)}<span class="subcell">${escapeHtml(item.recipient_email)}</span></td><td>${status(item.status)}</td></tr>`), "No parcel allocations have been recorded for this estate."),
   };
   const dialog = state.modal === "estate-form" ? estateFormDialog() : "";
@@ -112,8 +112,8 @@ function estateDetail() {
 }
 
 function parcels() {
-  const rows = data.parcels.map((item) => `<tr><td>${item.estate.name}</td><td><span class="table-title">${item.plot_number}</span><span class="subcell">${item.block || "No block"}</span></td><td>${item.area_sqm ? `${item.area_sqm} m²` : "—"}</td><td>${status(item.status)}</td></tr>`);
-  return layout(`<div class="page-head"><div><p class="eyebrow">Company administration</p><h1>Digital parcels</h1><p>Approved parcel records belonging to this company.</p></div></div><section class="panel">${table(["Estate", "Plot", "Area", "Status"], rows, "No company parcels have been added.")}</section>`, "Parcels");
+  const rows = data.parcels.map((item) => `<tr><td>${escapeHtml(item.estate.name)}</td><td><span class="table-title">${escapeHtml(item.name || item.plot_number)}</span><span class="subcell">Plot ${escapeHtml(item.plot_number)}${item.block ? ` · Block ${escapeHtml(item.block)}` : ""}</span></td><td>${escapeHtml(item.property_type || "—")}</td><td>${item.area_sqm ? `${item.area_sqm} m²` : "—"}</td><td>${status(item.status)}</td></tr>`);
+  return layout(`<div class="page-head"><div><p class="eyebrow">Company administration</p><h1>Parcels</h1><p>Create the plots you want to allocate. Survey coordinates are added later by the property holder.</p></div>${button("+ Create parcel", "create-parcel", "primary")}</div><section class="panel">${table(["Estate", "Parcel", "Type", "Area", "Status"], rows, "No company parcels have been created.")}</section>`, "Parcels");
 }
 
 function allocations() {

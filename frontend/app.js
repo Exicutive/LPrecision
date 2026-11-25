@@ -5,6 +5,7 @@ import { parcelSvg } from "./js/components.js?v=20261026";
 import {
   allocationModal,
   boundaryGuidanceModal,
+  parcelCreationModal,
   parcelModal,
   propertyBoundaryCoordinatesModal,
   propertySurveyPlanUploadModal,
@@ -371,6 +372,29 @@ async function submitAllocation(form) {
     state.toast = result.allocation.invitation?.status === "failed"
       ? "Allocation completed, but the notification failed. Use Resend invitation to retry."
       : "Allocation completed. The invitation was accepted by the configured email backend.";
+    render();
+  } catch (error) {
+    errorMessage.textContent = error.message;
+    errorMessage.hidden = false;
+  } finally {
+    if (submitButton.isConnected) submitButton.disabled = false;
+  }
+}
+
+async function submitParcel(form) {
+  const errorMessage = form.querySelector(".form-error");
+  const submitButton = form.querySelector('[type="submit"]');
+  errorMessage.hidden = true;
+  submitButton.disabled = true;
+  try {
+    const result = await recordsRequest(`companies/${state.activeCompanyId}/parcels`, {
+      method: "POST",
+      payload: Object.fromEntries(new FormData(form)),
+    });
+    state.modal = null;
+    state.adminPage = "parcels";
+    state.toast = `${result.parcel.name} is now available for allocation.`;
+    await loadAdminRecords();
     render();
   } catch (error) {
     errorMessage.textContent = error.message;
@@ -848,6 +872,7 @@ function render() {
             : userView();
 
   if (state.modal === "allocation") markup += allocationModal();
+  if (state.modal === "parcel-creation") markup += parcelCreationModal();
   if (state.modal === "parcel") markup += parcelModal();
   if (state.modal === "property-survey-upload") markup += propertySurveyPlanUploadModal();
   if (state.modal === "property-boundary-coordinates") markup += propertyBoundaryCoordinatesModal();
@@ -883,6 +908,8 @@ function bind() {
   if (estateForm) estateForm.addEventListener("submit", (event) => { event.preventDefault(); submitEstate(estateForm); });
   const allocationForm = app.querySelector("#allocation-form");
   if (allocationForm) allocationForm.addEventListener("submit", (event) => { event.preventDefault(); submitAllocation(allocationForm); });
+  const parcelCreationForm = app.querySelector("#parcel-creation-form");
+  if (parcelCreationForm) parcelCreationForm.addEventListener("submit", (event) => { event.preventDefault(); submitParcel(parcelCreationForm); });
   const propertySurveyPlanUploadForm = app.querySelector("#property-survey-plan-upload-form");
   if (propertySurveyPlanUploadForm) propertySurveyPlanUploadForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -975,6 +1002,9 @@ function handle(action) {
   } else if (action === "create-allocation") {
     state.adminPage = "allocations";
     state.modal = "allocation";
+  } else if (action === "create-parcel") {
+    state.adminPage = "parcels";
+    state.modal = "parcel-creation";
   } else if (action.startsWith("upload-property-survey:")) {
     state.propertySurveyAllocationId = Number(action.split(":")[1]);
     state.modal = "property-survey-upload";

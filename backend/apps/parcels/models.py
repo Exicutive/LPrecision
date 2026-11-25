@@ -16,6 +16,7 @@ class Parcel(models.Model):
 
     estate = models.ForeignKey(Estate, on_delete=models.PROTECT, related_name="parcels")
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    name = models.CharField(max_length=200, blank=True)
     plot_number = models.CharField(max_length=60)
     block = models.CharField(max_length=60, blank=True)
     area_sqm = models.DecimalField(
@@ -26,6 +27,8 @@ class Parcel(models.Model):
         validators=[MinValueValidator(0)],
     )
     property_type = models.CharField(max_length=100, blank=True)
+    plot_details = models.TextField(blank=True)
+    special_requests = models.TextField(blank=True)
     features = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.AVAILABLE)
     survey_reference = models.CharField(max_length=100, blank=True)

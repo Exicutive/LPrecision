@@ -59,6 +59,9 @@ from apps.accounts.models import VerifiedEmail
 User = get_user_model()
 
 
+PLOT_TYPES = {"Residential", "Commercial", "Corner Piece", "Mixed Use", "Other"}
+
+
 from apps.records.api_helpers import (
     _payload,
     _company_ids_for_user,
@@ -109,9 +112,10 @@ def company_parcels(request, company_id):
     payload = _payload(request) or {}
     estate_id = payload.get("estate_id")
     estate = membership.company.estates.filter(pk=estate_id).first()
+    name = str(payload.get("name", "")).strip()
     plot_number = str(payload.get("plot_number", "")).strip()
-    if not estate or not plot_number:
-        return JsonResponse({"detail": "A company estate and plot number are required."}, status=400)
+    if not estate or not name or not plot_number:
+        return JsonResponse({"detail": "Estate, parcel name, and plot reference are required."}, status=400)
     if Parcel.objects.filter(estate=estate, plot_number=plot_number).exists():
         return JsonResponse({"detail": "This plot number already exists in the estate."}, status=400)
     area = payload.get("area_sqm")
@@ -119,18 +123,31 @@ def company_parcels(request, company_id):
         area = Decimal(str(area)) if area not in (None, "") else None
     except (InvalidOperation, ValueError):
         return JsonResponse({"detail": "Area must be a number."}, status=400)
+    if area is not None and (not area.is_finite() or area < 0):
+        return JsonResponse({"detail": "Area must be a finite number greater than or equal to zero."}, status=400)
     property_type = str(payload.get("property_type", "")).strip()
+    plot_details = str(payload.get("plot_details", "")).strip()
+    special_requests = str(payload.get("special_requests", "")).strip()
     features = payload.get("features", [])
-    if len(property_type) > 100 or not isinstance(features, list) or not all(
+    if (
+        len(name) > 200
+        or property_type not in PLOT_TYPES
+        or not plot_details
+        or len(plot_details) > 4000
+        or len(special_requests) > 2000
+        or not isinstance(features, list)
+        or not all(
         isinstance(feature, str) for feature in features
+        )
     ):
         return JsonResponse(
-            {"detail": "Property type must be 100 characters or fewer and features must be a list of text values."},
+            {"detail": "Choose a valid plot type and provide plot details. Parcel name, plot details, or special requests may be too long, or features are invalid."},
             status=400,
         )
     parcel = Parcel.objects.create(
-        estate=estate, plot_number=plot_number, block=str(payload.get("block", "")).strip(),
-        area_sqm=area, property_type=property_type, features=features,
+        estate=estate, name=name, plot_number=plot_number, block=str(payload.get("block", "")).strip(),
+        area_sqm=area, property_type=property_type, plot_details=plot_details,
+        special_requests=special_requests, features=features,
         survey_reference=str(payload.get("survey_reference", "")).strip(),
         boundary_coordinates=payload.get("boundary_coordinates", []),
     )
