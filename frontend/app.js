@@ -131,11 +131,12 @@ function clearSensitiveClientState() {
   });
 }
 
-async function signOut() {
+async function signOut({ invitationMode } = {}) {
   await accountRequest("logout", { method: "POST", payload: {} });
   clearSensitiveClientState();
-  state.view = state.allocationInvitationToken || state.companyAdminInvitationToken ? "invite" : "auth";
-  state.authMode = "signin";
+  const hasInvitation = state.allocationInvitationToken || state.companyAdminInvitationToken;
+  state.view = hasInvitation && !invitationMode ? "invite" : "auth";
+  state.authMode = invitationMode || "signin";
   window.history.replaceState({}, "", window.location.pathname + window.location.search);
   render();
 }
@@ -1040,7 +1041,10 @@ function handle(action) {
     });
     return;
   } else if (action === "allocation-signout") {
-    signOut()
+    // Do not return the recipient to an intermediate screen. Their allocation
+    // link already identifies the required email, so go straight to account
+    // creation; the sign-in tab remains available for an existing account.
+    signOut({ invitationMode: "signup" })
       .catch((error) => {
         state.toast = error.message;
         render();
