@@ -23,7 +23,7 @@ export function invitationView() {
     const actions = state.user
       ? matchesEmail
         ? button("Link allocation to my account", "accept-allocation", "primary")
-        : `<p class="auth-error" role="alert">This allocation is tied to a different email address. Sign in with ${invitedEmail} to continue; no property details have been disclosed.</p>${button("Sign out and create account", "allocation-signout", "primary")}`
+        : `<p class="auth-error" role="alert">This allocation is tied to a different email address. Sign in with ${invitedEmail} to continue; no property details have been disclosed.</p>${state.invitationActionError ? `<p class="auth-error" role="alert">${escapeHtml(state.invitationActionError)}</p>` : ""}${state.invitationActionLoading ? `<button class="button primary" type="button" disabled>Signing out securely…</button>` : button("Sign out and create account", "allocation-signout", "primary")}`
       : `${button("I have an account", "invitation-auth:signin", "secondary")}${button("Create my account", "invitation-auth:signup", "primary")}`;
     return `<main class="invite-page"><section class="invite-card"><div class="invite-banner"><a class="brand" href="#home">${brand()}</a><p>Secure access to your allocated property.</p></div><div class="invite-body"><p class="eyebrow">Property allocation</p><h1>Claim your TerraLedger allocation.</h1><p class="muted">This invitation is for <strong>${invitedEmail}</strong>. Register or sign in using this exact email address to securely link the allocation to your account.</p><div class="form-actions">${actions}</div></div></section></main>`;
   }

@@ -49,6 +49,8 @@ export const state = {
   invitationLoading: new URLSearchParams(window.location.search).has("company_admin_invitation")
     || new URLSearchParams(window.location.search).has("allocation_invitation"),
   invitationError: "",
+  invitationActionError: "",
+  invitationActionLoading: false,
   invitationAccepted: false,
   allocationStep: 1,
   selectedParcel: null,

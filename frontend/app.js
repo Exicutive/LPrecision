@@ -141,6 +141,20 @@ async function signOut({ invitationMode } = {}) {
   render();
 }
 
+async function signOutForAllocationAccount() {
+  state.invitationActionError = "";
+  state.invitationActionLoading = true;
+  render();
+  try {
+    await signOut({ invitationMode: "signup" });
+  } catch (error) {
+    state.invitationActionLoading = false;
+    state.invitationActionError = error.message || "Could not sign out. Refresh the page and try again.";
+    state.view = "invite";
+    render();
+  }
+}
+
 async function recordsRequest(path, { method = "GET", payload, formData } = {}) {
   const [route, query] = path.split("?", 2);
   const requestUrl = `${recordsApi}/${route.replace(/\/$/, "")}/${query === undefined ? "" : `?${query}`}`;
@@ -1041,14 +1055,7 @@ function handle(action) {
     });
     return;
   } else if (action === "allocation-signout") {
-    // Do not return the recipient to an intermediate screen. Their allocation
-    // link already identifies the required email, so go straight to account
-    // creation; the sign-in tab remains available for an existing account.
-    signOut({ invitationMode: "signup" })
-      .catch((error) => {
-        state.toast = error.message;
-        render();
-      });
+    signOutForAllocationAccount();
     return;
   } else if (action === "register-company") {
     state.modal = "register-company";
