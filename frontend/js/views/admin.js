@@ -11,7 +11,10 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character
 })[character]);
 
 function accessRequired() {
-  return `<main class="access-page"><section class="access-card"><a class="brand" href="../">${brand()}</a><p class="eyebrow">Administrator workspace</p><h1>Administrator access required</h1><p>Sign in with an assigned Platform Admin or Company Admin account.</p>${button("Go to sign in", "auth", "primary")}</section></main>`;
+  const signedInEmail = state.user?.email
+    ? `<p>You are signed in as <strong>${escapeHtml(state.user.email)}</strong>, but this account has not been assigned a Platform Admin or Company Admin role.</p>`
+    : "<p>Sign in with an assigned Platform Admin or Company Admin account.</p>";
+  return `<main class="access-page"><section class="access-card"><a class="brand" href="../">${brand()}</a><p class="eyebrow">Administrator workspace</p><h1>Administrator access required</h1>${signedInEmail}<p class="muted">Administrator roles are assigned by the platform, not created from this sign-in screen.</p>${button(state.user ? "Sign out and use another account" : "Go to workspace sign in", "workspace-auth", "primary")}</section></main>`;
 }
 
 function layout(content, title) {

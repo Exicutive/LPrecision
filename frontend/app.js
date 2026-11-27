@@ -1,5 +1,5 @@
 import { currentEndpoint, data, state } from "./js/data.js?v=20261127-auth-navigation";
-import { adminView } from "./js/views/admin.js?v=20261106-settings";
+import { adminView } from "./js/views/admin.js?v=20261127-workspace-auth";
 import { authView } from "./js/views/auth.js?v=20261127-auth-navigation";
 import { parcelSvg } from "./js/components.js?v=20261026";
 import {
@@ -1008,6 +1008,15 @@ function handle(action) {
     return;
   } else if (action === "auth") {
     navigateTo("property");
+    return;
+  } else if (action === "workspace-auth") {
+    signOut().catch(() => {
+      clearSensitiveClientState();
+      state.view = "auth";
+      state.authMode = "signin";
+      state.toast = "Your session could not be closed automatically. Please sign in with the account that has workspace access.";
+      render();
+    });
     return;
   } else if (action === "invite-preview") {
     state.view = "invite";
