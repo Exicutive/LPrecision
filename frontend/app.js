@@ -1,6 +1,6 @@
-import { currentEndpoint, data, state } from "./js/data.js?v=20261106-settings";
+import { currentEndpoint, data, state } from "./js/data.js?v=20261127-auth-navigation";
 import { adminView } from "./js/views/admin.js?v=20261106-settings";
-import { authView } from "./js/views/auth.js?v=20261106";
+import { authView } from "./js/views/auth.js?v=20261127-auth-navigation";
 import { parcelSvg } from "./js/components.js?v=20261026";
 import {
   allocationModal,
@@ -1189,7 +1189,15 @@ if (currentEndpoint === "property") {
     })
     .catch((error) => {
       if (state.companyAdminInvitationToken) {
-        loadCompanyAdminInvitation().then(render);
+        loadCompanyAdminInvitation().then(() => {
+          if (!state.invitationError) {
+            state.authMode = "signup";
+            state.view = "auth";
+          } else {
+            state.view = "invite";
+          }
+          render();
+        });
       } else if (state.allocationInvitationToken) {
         loadAllocationInvitation().then(() => {
           // A property invite is most often for a recipient who does not have an

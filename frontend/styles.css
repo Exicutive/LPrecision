@@ -1742,7 +1742,9 @@
     border-radius: 9px;
     background: #eff4f1;
   }
-  .auth-tabs button {
+  .auth-tabs button,
+  .auth-tabs a {
+    display: block;
     padding: 9px;
     border: 0;
     border-radius: 6px;
@@ -1750,8 +1752,11 @@
     background: transparent;
     font-size: 12px;
     font-weight: 800;
+    text-align: center;
+    text-decoration: none;
   }
-  .auth-tabs button.active {
+  .auth-tabs button.active,
+  .auth-tabs a.active {
     color: var(--forest);
     background: #fff;
     box-shadow: 0 1px 5px rgba(9, 54, 43, 0.12);

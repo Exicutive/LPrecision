@@ -19,6 +19,8 @@ export const currentEndpoint = window.location.pathname.includes("/workspace/")
     ? "property"
     : "public";
 
+const requestedAuthMode = new URLSearchParams(window.location.search).get("auth");
+
 export const state = {
   view:
     currentEndpoint === "admin"
@@ -37,7 +39,9 @@ export const state = {
   propertyDetail: null,
   selectedAllocationId: null,
   propertyTab: "overview",
-  authMode: "signin",
+  authMode: ["signin", "signup", "forgot"].includes(requestedAuthMode)
+    ? requestedAuthMode
+    : "signin",
   passwordResetNotice: "",
   modal: null,
   invitationCompanyId: null,

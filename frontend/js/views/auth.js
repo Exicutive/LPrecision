@@ -1,9 +1,15 @@
 import { brand, uiIcon } from "../components.js?v=20261026";
-import { currentEndpoint, state } from "../data.js?v=20261106";
+import { currentEndpoint, state } from "../data.js?v=20261127-auth-navigation";
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[character]);
+
+function authModeUrl(mode) {
+  const query = new URLSearchParams(window.location.search);
+  query.set("auth", mode);
+  return `${window.location.pathname}?${query.toString()}`;
+}
 
 function emailField(value = "", locked = false) {
   return `<div class="field"><label for="auth-email">Email address</label><input id="auth-email" name="email" type="email" autocomplete="email" placeholder="name@example.com" value="${escapeHtml(value)}" ${locked ? "readonly" : ""} required /></div>`;
@@ -37,9 +43,9 @@ export function authView() {
   return `<main class="auth-page"><section class="auth-card">
     <aside class="auth-intro"><a class="brand" href="#home">${brand()}</a><div><p class="eyebrow">${isAdminPortal ? "Administrator access" : "Secure property access"}</p><h1>${isAdminPortal ? "Estate records, securely managed." : "Your land records, in one trusted place."}</h1><p>${isAdminPortal ? "Only authorized staff members can access and manage estate records." : "Access allocation details, approved survey information and boundary records connected to your account."}</p></div><div class="auth-security"><span>${uiIcon("shield")}</span><p><strong>Controlled access</strong>Only authorized users can view linked property records.</p></div></aside>
     <section class="auth-form-wrap"><button class="auth-back" data-action="public" aria-label="Return to the public site">← Back to site</button><div class="auth-form-head"><p class="eyebrow">${isSignUp ? "New here?" : "Account access"}</p><h2>${heading}</h2><p>${description}</p></div>
-      ${isAdminPortal ? "" : `<div class="auth-tabs" role="tablist" aria-label="Account options"><button class="${!isSignUp ? "active" : ""}" data-action="auth-mode:signin" role="tab" aria-selected="${!isSignUp}">Sign in</button><button class="${isSignUp ? "active" : ""}" data-action="auth-mode:signup" role="tab" aria-selected="${isSignUp}">Create account</button></div>`}
+      ${isAdminPortal ? "" : `<div class="auth-tabs" role="tablist" aria-label="Account options"><a class="${!isSignUp ? "active" : ""}" href="${authModeUrl("signin")}" role="tab" aria-selected="${!isSignUp}">Sign in</a><a class="${isSignUp ? "active" : ""}" href="${authModeUrl("signup")}" role="tab" aria-selected="${isSignUp}">Create account</a></div>`}
       <form class="auth-form" id="auth-form"><div class="auth-fields">${nameField}${emailField(isCompanyAdminInvitation ? state.companyAdminInvitation?.email || "" : isAllocationInvitation ? state.allocationInvitation?.email || "" : "", hasInvitation)}<div class="field"><label for="auth-password">Password</label><input id="auth-password" name="password" type="password" autocomplete="${isSignUp ? "new-password" : "current-password"}" placeholder="Enter your password" minlength="8" required /></div>${accountHelp}</div><p class="auth-error" id="auth-error" role="alert" hidden></p><button class="button primary auth-submit" type="submit">${submitLabel}</button></form>
-      ${isAdminPortal ? "" : `<p class="auth-switch">${isSignUp ? "Already have an account?" : "New to TerraLedger?"} <button class="text-action" data-action="auth-mode:${alternateAction}">${alternateLabel}</button></p>`}
+      ${isAdminPortal ? "" : `<p class="auth-switch">${isSignUp ? "Already have an account?" : "New to TerraLedger?"} <a class="text-action" href="${authModeUrl(alternateAction)}">${alternateLabel}</a></p>`}
   <p class="auth-note">${isAdminPortal ? "Administrative roles are assigned only through secure platform workflows." : "Only allocation records verified by the backend are displayed after sign-in."}</p>
     </section>
   </section></main>`;
